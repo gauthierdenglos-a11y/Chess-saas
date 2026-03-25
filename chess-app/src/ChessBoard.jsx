@@ -32,7 +32,21 @@ function coordsToNotation(row, col) {
   return `${file}${rank}`;
 }
 
+// Fonction helper pour obtenir la clé hasMoved d'une pièce
+function getHasMovedKey(piece, row, col) {
+  const color = piece === piece.toUpperCase() ? 'white' : 'black';
+  if (piece.toLowerCase() === '♔' || piece.toLowerCase() === '♚') {
+    return `${color}-king`;
+  }
+  if (piece.toLowerCase() === '♖' || piece.toLowerCase() === '♜') {
+    return `${color}-rook-${col}`;
+  }
+  return null; // Autres pièces n'ont pas besoin de tracking pour le roque
+}
+
 const ChessBoard = () => {
+  const STORAGE_KEY = 'chess-app-state-v1';
+  
   // État pour stocker le plateau (matrice 8x8)
   const [board, setBoard] = useState(getInitialBoard());
   // État pour la case sélectionnée : [row, col] ou null
@@ -45,6 +59,33 @@ const ChessBoard = () => {
   const [moveHistory, setMoveHistory] = useState([]);
   const [theme, setTheme] = useState('dark');
   const [lastMove, setLastMove] = useState(null);
+  // État pour tracker les pièces qui ont bougé (nécessaire pour le roque)
+  const [hasMoved, setHasMoved] = useState(() => {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.hasMoved || {
+        'white-king': false,
+        'white-rook-0': false,
+        'white-rook-7': false,
+        'black-king': false,
+        'black-rook-0': false,
+        'black-rook-7': false,
+      };
+    }
+    return {
+      'white-king': false,
+      'white-rook-0': false,
+      'white-rook-7': false,
+      'black-king': false,
+      'black-rook-0': false,
+      'black-rook-7': false,
+    };
+  });
+  // État pour la capture en passant
+  const [enPassantTarget, setEnPassantTarget] = useState(null);
+  // État pour la promotion du pion
+  const [promotionPending, setPromotionPending] = useState(null); // {from: [row, col], to: [row, col], piece: '♙'}
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
@@ -60,9 +101,112 @@ const ChessBoard = () => {
     setWinner(null);
     setMoveHistory([]);
     setLastMove(null);
+    setHasMoved({
+      'white-king': false,
+      'white-rook-0': false,
+      'white-rook-7': false,
+      'black-king': false,
+      'black-rook-0': false,
+      'black-rook-7': false,
+    });
+    setEnPassantTarget(null);
+    setPromotionPending(null);
   };
 
-  const STORAGE_KEY = 'chess-app-state-v1';
+  // Fonction pour finaliser la promotion du pion
+  const completePromotion = (chosenPiece) => {
+    if (!promotionPending) return;
+
+    const { from, to, piece, capturedPiece, enPassantCapture, rookMove } = promotionPending;
+    const [selectedRow, selectedCol] = from;
+    const [row, col] = to;
+
+    // Créer le nouveau plateau avec la pièce promue
+    const newBoard = board.map(r => [...r]);
+
+    // Gérer la capture en passant si elle existait
+    if (enPassantCapture) {
+      const [capturedRow, capturedCol] = enPassantCapture.position;
+      newBoard[capturedRow][capturedCol] = null;
+    }
+
+    // Gérer le roque si nécessaire
+    if (rookMove) {
+      const [rookFromRow, rookFromCol] = rookMove.from;
+      const [rookToRow, rookToCol] = rookMove.to;
+      newBoard[rookToRow][rookToCol] = rookMove.piece;
+      newBoard[rookFromRow][rookFromCol] = null;
+    }
+
+    // Placer la pièce promue
+    newBoard[row][col] = chosenPiece;
+    newBoard[selectedRow][selectedCol] = null;
+    setBoard(newBoard);
+
+    // Mettre à jour hasMoved
+    const newHasMoved = { ...hasMoved };
+    const movingPieceKey = getHasMovedKey(piece, selectedRow, selectedCol);
+    if (movingPieceKey) {
+      newHasMoved[movingPieceKey] = true;
+    }
+
+    // Si c'était un roque, marquer la tour comme ayant bougé
+    if (rookMove) {
+      const rookKey = getHasMovedKey(rookMove.piece, rookMove.from[0], rookMove.from[1]);
+      if (rookKey) {
+        newHasMoved[rookKey] = true;
+      }
+    }
+
+    setHasMoved(newHasMoved);
+
+    // Mettre à jour enPassantTarget (pas de double mouvement pour la promotion)
+    setEnPassantTarget(null);
+
+    // Historique du coup avec notation de promotion
+    const fromNotation = coordsToNotation(selectedRow, selectedCol);
+    const toNotation = coordsToNotation(row, col);
+    let moveNotation = `${piece} ${fromNotation} → ${toNotation}`;
+
+    // Ajouter la capture dans la notation
+    if (capturedPiece) {
+      moveNotation += ` x ${capturedPiece}`;
+    } else if (enPassantCapture) {
+      moveNotation += ` x ${enPassantCapture.piece} (en passant)`;
+    }
+
+    // Notation spéciale pour le roque
+    if (rookMove) {
+      const isKingside = col > selectedCol;
+      moveNotation = `O-O${isKingside ? '' : '-O'}`;
+    }
+
+    // Ajouter la promotion
+    moveNotation += `=${chosenPiece}`;
+
+    setMoveHistory(prevHistory => [...prevHistory, moveNotation]);
+    setLastMove({ from: [selectedRow, selectedCol], to: [row, col] });
+
+    // Réinitialiser la promotion en attente
+    setPromotionPending(null);
+
+    // Alterner le joueur
+    const nextPlayer = currentPlayer === 'white' ? 'black' : 'white';
+    setCurrentPlayer(nextPlayer);
+
+    // Vérifier l'état du jeu pour le joueur suivant
+    if (isCheckmate(newBoard, nextPlayer)) {
+      setGameStatus('checkmate');
+      setWinner(currentPlayer);
+      setIsCheck(true);
+    } else if (isStalemate(newBoard, nextPlayer)) {
+      setGameStatus('stalemate');
+      setWinner(null);
+      setIsCheck(false);
+    } else {
+      setIsCheck(isKingInCheck(newBoard, nextPlayer));
+    }
+  };
 
   // Charger l'état depuis localStorage au premier rendu
   useEffect(() => {
@@ -77,6 +221,8 @@ const ChessBoard = () => {
         setWinner(parsed.winner);
         setMoveHistory(parsed.moveHistory || []);
         setTheme(parsed.theme || 'dark');
+        setEnPassantTarget(parsed.enPassantTarget || null);
+        setPromotionPending(parsed.promotionPending || null);
       }
     }
   }, []);
@@ -91,12 +237,18 @@ const ChessBoard = () => {
       winner,
       moveHistory,
       theme,
+      hasMoved,
+      enPassantTarget,
+      promotionPending,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [board, currentPlayer, isCheck, gameStatus, winner, moveHistory, theme]);
+  }, [board, currentPlayer, isCheck, gameStatus, winner, moveHistory, theme, hasMoved, enPassantTarget, promotionPending]);
 
   // Fonction appelée quand on clique sur une case
   const handleSquareClick = (row, col) => {
+    // Ne rien faire si une promotion est en attente
+    if (promotionPending) return;
+
     if (gameStatus !== null) {
       return; // Partie terminée, pas de jouabilité
     }
@@ -115,7 +267,7 @@ const ChessBoard = () => {
           for (let toRow = 0; toRow < 8; toRow++) {
             for (let toCol = 0; toCol < 8; toCol++) {
               if (row === toRow && col === toCol) continue;
-              if (isValidMove(board, [row, col], [toRow, toCol]) && !isMoveLeavesKingInCheck(board, [row, col], [toRow, toCol], currentPlayer)) {
+              if (isValidMove(board, [row, col], [toRow, toCol], hasMoved, enPassantTarget) && !isMoveLeavesKingInCheck(board, [row, col], [toRow, toCol], currentPlayer)) {
                 nextMoves.push([toRow, toCol]);
               }
             }
@@ -128,44 +280,139 @@ const ChessBoard = () => {
       const [selectedRow, selectedCol] = selectedSquare;
       
       // Vérification 1 : Le mouvement est-il légal ?
-      if (isValidMove(board, [selectedRow, selectedCol], [row, col])) {
+      if (isValidMove(board, [selectedRow, selectedCol], [row, col], hasMoved, enPassantTarget)) {
         // Vérification 2 : Le mouvement ne laisse-t-il pas le roi en échec ?
         if (!isMoveLeavesKingInCheck(board, [selectedRow, selectedCol], [row, col], currentPlayer)) {
           // Mouvement valide et sûr : déplacer la pièce
           const newBoard = board.map(r => [...r]); // Copie profonde du plateau
           const movingPiece = newBoard[selectedRow][selectedCol];
           const capturedPiece = newBoard[row][col];
-          newBoard[row][col] = movingPiece; // Déplacer la pièce
-          newBoard[selectedRow][selectedCol] = null; // Vider l'ancienne case
-          setBoard(newBoard); // Mettre à jour le plateau
-
-          // Historique du coup
-          const fromNotation = coordsToNotation(selectedRow, selectedCol);
-          const toNotation = coordsToNotation(row, col);
-          const moveNotation = `${movingPiece} ${fromNotation} → ${toNotation}${capturedPiece ? ` x ${capturedPiece}` : ''}`;
-          setMoveHistory(prevHistory => [...prevHistory, moveNotation]);
-          setLastMove({ from: [selectedRow, selectedCol], to: [row, col] });
-
-          // Alterner le joueur
-          const nextPlayer = currentPlayer === 'white' ? 'black' : 'white';
-          setCurrentPlayer(nextPlayer);
-
-          // Vérifier l'état du jeu pour le joueur suivant
-          // Vérification 1 : Est-ce un échec et mat ?
-          if (isCheckmate(newBoard, nextPlayer)) {
-            setGameStatus('checkmate');
-            setWinner(currentPlayer); // Le joueur actuel gagne
-            setIsCheck(true); // Le roi est en échec (maj)
+          
+          // Gérer le roque spécial (la tour bouge aussi)
+          let rookMove = null;
+          if ((movingPiece === '♔' || movingPiece === '♚') && Math.abs(col - selectedCol) === 2) {
+            // C'est un roque !
+            const isKingside = col > selectedCol; // roque côté roi si col augmente
+            const rookFromCol = isKingside ? 7 : 0;
+            const rookToCol = isKingside ? 5 : 3;
+            const rookPiece = newBoard[selectedRow][rookFromCol];
+            
+            // Déplacer la tour
+            newBoard[selectedRow][rookToCol] = rookPiece;
+            newBoard[selectedRow][rookFromCol] = null;
+            
+            rookMove = {
+              from: [selectedRow, rookFromCol],
+              to: [selectedRow, rookToCol],
+              piece: rookPiece
+            };
           }
-          // Vérification 2 : Est-ce un match nul (pat) ?
-          else if (isStalemate(newBoard, nextPlayer)) {
-            setGameStatus('stalemate');
-            setWinner(null); // Match nul
-            setIsCheck(false);
+          
+          // Gérer la capture en passant
+          let enPassantCapture = null;
+          if ((movingPiece === '♙' || movingPiece === '♟') && enPassantTarget && row === enPassantTarget[0] && col === enPassantTarget[1]) {
+            // C'est une capture en passant !
+            // Le pion capturé est sur la même colonne que la destination, mais sur la ligne de départ
+            const capturedPawnRow = selectedRow;
+            const capturedPawnCol = col;
+            const capturedPiece = newBoard[capturedPawnRow][capturedPawnCol];
+            
+            // Retirer le pion capturé
+            newBoard[capturedPawnRow][capturedPawnCol] = null;
+            
+            enPassantCapture = {
+              position: [capturedPawnRow, capturedPawnCol],
+              piece: capturedPiece
+            };
           }
-          // Vérification 3 : Le roi du joueur suivant est-il en échec ?
-          else {
-            setIsCheck(isKingInCheck(newBoard, nextPlayer));
+          
+          // Vérifier si c'est une promotion de pion
+          const isPromotion = (movingPiece === '♙' && row === 0) || (movingPiece === '♟' && row === 7);
+          
+          if (isPromotion) {
+            // Promotion en attente : stocker les informations et attendre le choix du joueur
+            setPromotionPending({
+              from: [selectedRow, selectedCol],
+              to: [row, col],
+              piece: movingPiece,
+              capturedPiece: capturedPiece,
+              enPassantCapture: enPassantCapture,
+              rookMove: rookMove
+            });
+            // Ne pas finaliser le mouvement maintenant
+          } else {
+            // Mouvement normal : finaliser immédiatement
+            newBoard[row][col] = movingPiece; // Déplacer la pièce
+            newBoard[selectedRow][selectedCol] = null; // Vider l'ancienne case
+            setBoard(newBoard); // Mettre à jour le plateau
+
+            // Mettre à jour hasMoved
+            const newHasMoved = { ...hasMoved };
+            const movingPieceKey = getHasMovedKey(movingPiece, selectedRow, selectedCol);
+            if (movingPieceKey) {
+              newHasMoved[movingPieceKey] = true;
+            }
+            
+            // Si c'était un roque, marquer la tour comme ayant bougé
+            if (rookMove) {
+              const rookKey = getHasMovedKey(rookMove.piece, rookMove.from[0], rookMove.from[1]);
+              if (rookKey) {
+                newHasMoved[rookKey] = true;
+              }
+            }
+            
+            setHasMoved(newHasMoved);
+
+            // Mettre à jour enPassantTarget
+            let newEnPassantTarget = null;
+            if ((movingPiece === '♙' || movingPiece === '♟') && Math.abs(row - selectedRow) === 2) {
+              // Le pion a fait un double mouvement, définir la cible en passant
+              newEnPassantTarget = [selectedRow + (row - selectedRow) / 2, col];
+            }
+            setEnPassantTarget(newEnPassantTarget);
+
+            // Historique du coup
+            const fromNotation = coordsToNotation(selectedRow, selectedCol);
+            const toNotation = coordsToNotation(row, col);
+            let moveNotation = `${movingPiece} ${fromNotation} → ${toNotation}`;
+            
+            // Ajouter la capture dans la notation
+            if (capturedPiece) {
+              moveNotation += ` x ${capturedPiece}`;
+            } else if (enPassantCapture) {
+              moveNotation += ` x ${enPassantCapture.piece} (en passant)`;
+            }
+            
+            // Notation spéciale pour le roque
+            if (rookMove) {
+              const isKingside = col > selectedCol;
+              moveNotation = `O-O${isKingside ? '' : '-O'}`; // O-O pour petit roque, O-O-O pour grand roque
+            }
+            
+            setMoveHistory(prevHistory => [...prevHistory, moveNotation]);
+            setLastMove({ from: [selectedRow, selectedCol], to: [row, col] });
+
+            // Alterner le joueur
+            const nextPlayer = currentPlayer === 'white' ? 'black' : 'white';
+            setCurrentPlayer(nextPlayer);
+
+            // Vérifier l'état du jeu pour le joueur suivant
+            // Vérification 1 : Est-ce un échec et mat ?
+            if (isCheckmate(newBoard, nextPlayer)) {
+              setGameStatus('checkmate');
+              setWinner(currentPlayer); // Le joueur actuel gagne
+              setIsCheck(true); // Le roi est en échec (maj)
+            }
+            // Vérification 2 : Est-ce un match nul (pat) ?
+            else if (isStalemate(newBoard, nextPlayer)) {
+              setGameStatus('stalemate');
+              setWinner(null); // Match nul
+              setIsCheck(false);
+            }
+            // Vérification 3 : Le roi du joueur suivant est-il en échec ?
+            else {
+              setIsCheck(isKingInCheck(newBoard, nextPlayer));
+            }
           }
         }
       }
@@ -215,31 +462,104 @@ const ChessBoard = () => {
         </div>
       )}
       
-      {/* Plateau d'échecs */}
-      <div className="chessboard">
-        {board.map((row, rowIndex) =>
-          row.map((piece, colIndex) => {
-            const isWhite = (rowIndex + colIndex) % 2 === 0;
-            const isSelected = selectedSquare && selectedSquare[0] === rowIndex && selectedSquare[1] === colIndex;
-            const moveIsLast = lastMove && (
-              (lastMove.from[0] === rowIndex && lastMove.from[1] === colIndex) ||
-              (lastMove.to[0] === rowIndex && lastMove.to[1] === colIndex)
-            );
+      {/* Plateau d'échecs avec légende */}
+      <div className="chessboard-wrapper">
+        {/* Labels des rangées (1-8) à gauche */}
+        <div className="rank-labels">
+          {[8, 7, 6, 5, 4, 3, 2, 1].map(rank => (
+            <div key={rank} className="rank-label">{rank}</div>
+          ))}
+        </div>
 
-            return (
-              <Square
-                key={`${rowIndex}-${colIndex}`}
-                color={isWhite ? 'white' : 'black'}
-                piece={piece}
-                isSelected={isSelected}
-                isPossible={possibleMoves.some(pos => pos[0] === rowIndex && pos[1] === colIndex)}
-                isLastMove={moveIsLast}
-                onSquareClick={() => handleSquareClick(rowIndex, colIndex)}
-              />
-            );
-          })
-        )}
+        {/* Conteneur principal du plateau */}
+        <div className="chessboard-container-main">
+          {/* Plateau d'échecs */}
+          <div className="chessboard">
+            {board.map((row, rowIndex) =>
+              row.map((piece, colIndex) => {
+                const isWhite = (rowIndex + colIndex) % 2 === 0;
+                const isSelected = selectedSquare && selectedSquare[0] === rowIndex && selectedSquare[1] === colIndex;
+                const moveIsLast = lastMove && (
+                  (lastMove.from[0] === rowIndex && lastMove.from[1] === colIndex) ||
+                  (lastMove.to[0] === rowIndex && lastMove.to[1] === colIndex)
+                );
+
+                return (
+                  <Square
+                    key={`${rowIndex}-${colIndex}`}
+                    color={isWhite ? 'white' : 'black'}
+                    piece={piece}
+                    isSelected={isSelected}
+                    isPossible={possibleMoves.some(pos => pos[0] === rowIndex && pos[1] === colIndex)}
+                    isLastMove={moveIsLast}
+                    onSquareClick={() => handleSquareClick(rowIndex, colIndex)}
+                  />
+                );
+              })
+            )}
+          </div>
+
+          {/* Labels des colonnes (a-h) en bas */}
+          <div className="file-labels">
+            {['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(file => (
+              <div key={file} className="file-label">{file}</div>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Interface de promotion du pion */}
+      {promotionPending && (
+        <div className="promotion-modal">
+          <div className="promotion-content">
+            <h3>Promotion du pion</h3>
+            <p>Choisissez la pièce de promotion :</p>
+            <div className="promotion-pieces">
+              {currentPlayer === 'white' ? (
+                // Pièces blanches
+                <>
+                  <button onClick={() => completePromotion('♕')} className="promotion-piece">
+                    <img src="/Chess_qlt45.svg" alt="Reine" />
+                    <span>Reine</span>
+                  </button>
+                  <button onClick={() => completePromotion('♖')} className="promotion-piece">
+                    <img src="/Chess_rlt45.svg" alt="Tour" />
+                    <span>Tour</span>
+                  </button>
+                  <button onClick={() => completePromotion('♗')} className="promotion-piece">
+                    <img src="/Chess_blt45.svg" alt="Fou" />
+                    <span>Fou</span>
+                  </button>
+                  <button onClick={() => completePromotion('♘')} className="promotion-piece">
+                    <img src="/Chess_nlt45.svg" alt="Cavalier" />
+                    <span>Cavalier</span>
+                  </button>
+                </>
+              ) : (
+                // Pièces noires
+                <>
+                  <button onClick={() => completePromotion('♛')} className="promotion-piece">
+                    <img src="/Chess_qdt45.svg" alt="Reine" />
+                    <span>Reine</span>
+                  </button>
+                  <button onClick={() => completePromotion('♜')} className="promotion-piece">
+                    <img src="/Chess_rdt45.svg" alt="Tour" />
+                    <span>Tour</span>
+                  </button>
+                  <button onClick={() => completePromotion('♝')} className="promotion-piece">
+                    <img src="/Chess_bdt45.svg" alt="Fou" />
+                    <span>Fou</span>
+                  </button>
+                  <button onClick={() => completePromotion('♞')} className="promotion-piece">
+                    <img src="/Chess_ndt45.svg" alt="Cavalier" />
+                    <span>Cavalier</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="history-container">
         <h3>Historique des coups</h3>

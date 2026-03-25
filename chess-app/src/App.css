@@ -33,6 +33,68 @@
   overflow: hidden;
 }
 
+/* Styles pour la légende de l'échiquier */
+.chessboard-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 auto;
+}
+
+.rank-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 0;
+}
+
+.rank-label {
+  width: 24px;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #f0f4ff;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  user-select: none;
+}
+
+.chessboard-container.light-theme .rank-label {
+  color: #222;
+}
+
+.chessboard-container-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-labels {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0;
+}
+
+.file-label {
+  width: 68px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #f0f4ff;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  user-select: none;
+}
+
+.chessboard-container.light-theme .file-label {
+  color: #222;
+}
+
 .chessboard-container.light-theme {
   background: linear-gradient(145deg, rgba(245, 243, 236, 0.95), rgba(221, 225, 231, 0.95));
   color: #222;
@@ -46,6 +108,98 @@
 .chessboard-container.dark-theme {
   background: linear-gradient(145deg, rgba(36, 45, 74, 0.85), rgba(30, 34, 68, 0.95));
   color: #f0f4ff;
+}
+
+/* Styles pour la promotion du pion */
+.promotion-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.promotion-content {
+  background: linear-gradient(145deg, rgba(36, 45, 74, 0.95), rgba(30, 34, 68, 0.98));
+  color: #f0f4ff;
+  padding: 30px;
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+}
+
+.chessboard-container.light-theme .promotion-content {
+  background: linear-gradient(145deg, rgba(245, 243, 236, 0.95), rgba(221, 225, 231, 0.98));
+  color: #222;
+}
+
+.promotion-content h3 {
+  margin: 0 0 15px 0;
+  font-size: 1.5rem;
+  color: #f0f4ff;
+}
+
+.chessboard-container.light-theme .promotion-content h3 {
+  color: #222;
+}
+
+.promotion-content p {
+  margin: 0 0 20px 0;
+  font-size: 1.1rem;
+}
+
+.promotion-pieces {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.promotion-piece {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+
+.chessboard-container.light-theme .promotion-piece {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.promotion-piece:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.chessboard-container.light-theme .promotion-piece:hover {
+  background: rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+.promotion-piece img {
+  width: 40px;
+  height: 40px;
+}
+
+.promotion-piece span {
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 
 .toolbar {

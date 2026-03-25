@@ -65,8 +65,12 @@ function isDestinationValid(board, piece, to) {
 
 /**
  * Valide un mouvement de PION
+ * @param {Array} board - Le plateau d'échecs
+ * @param {Array} from - Position de départ [row, col]
+ * @param {Array} to - Position d'arrivée [row, col]
+ * @param {Array} enPassantTarget - Position du pion pouvant être capturé en passant [row, col] ou null
  */
-function isValidPawnMove(board, from, to) {
+function isValidPawnMove(board, from, to, enPassantTarget = null) {
   const [fromRow, fromCol] = from;
   const [toRow, toCol] = to;
   const piece = board[fromRow][fromCol];
@@ -108,6 +112,11 @@ function isValidPawnMove(board, from, to) {
     const targetPiece = board[toRow][toCol];
     if (targetPiece !== null) {
       return isWhite !== isWhitePiece(targetPiece); // Pièce adverse
+    }
+
+    // Capture en passant
+    if (enPassantTarget && toRow === enPassantTarget[0] && toCol === enPassantTarget[1]) {
+      return true;
     }
   }
 
@@ -221,6 +230,7 @@ function isValidQueenMove(board, from, to) {
  * Valide un mouvement de ROI (♔/♚)
  * Mouvement : une seule case dans n'importe quelle direction
  * (horizontal, vertical ou diagonal)
+ * OU roque : mouvement de 2 cases horizontalement
  */
 function isValidKingMove(board, from, to) {
   const [fromRow, fromCol] = from;
@@ -230,13 +240,101 @@ function isValidKingMove(board, from, to) {
   const rowDiff = Math.abs(toRow - fromRow);
   const colDiff = Math.abs(toCol - fromCol);
 
-  // Le roi se déplace d'une seule case max
-  if (rowDiff > 1 || colDiff > 1) {
-    return false;
+  // Mouvement normal : une seule case max
+  if (rowDiff <= 1 && colDiff <= 1) {
+    return isDestinationValid(board, piece, to);
   }
 
-  // Destination valide (vide ou pièce adverse)
-  return isDestinationValid(board, piece, to);
+  // Roque potentiel : 2 cases horizontalement, même ligne
+  if (rowDiff === 0 && colDiff === 2) {
+    // Le roque sera validé séparément dans isValidCastling
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Vérifie si le roque est valide
+ * @param {Array} board - Le plateau d'échecs
+ * @param {Array} from - Position du roi [row, col]
+ * @param {Array} to - Position d'arrivée du roi [row, col]
+ * @param {Object} hasMoved - État des pièces qui ont bougé
+ * @returns {boolean} true si le roque est valide
+ */
+export function isValidCastling(board, from, to, hasMoved) {
+  const [fromRow, fromCol] = from;
+  const [toRow, toCol] = to;
+  const piece = board[fromRow][fromCol];
+
+  // Vérifications de base
+  if (fromRow !== toRow) return false; // Même ligne
+  const colDiff = toCol - fromCol;
+  if (Math.abs(colDiff) !== 2) return false; // Exactement 2 cases
+
+  const isWhite = isWhitePiece(piece);
+  const color = isWhite ? 'white' : 'black';
+  const kingKey = `${color}-king`;
+
+  // Le roi n'a pas bougé
+  if (hasMoved[kingKey]) return false;
+
+  // Le roi n'est pas en échec
+  if (isKingInCheck(board, color)) return false;
+
+  // Déterminer le côté du roque
+  const isKingside = colDiff > 0; // true pour roque côté roi, false pour côté dame
+  const rookCol = isKingside ? 7 : 0;
+  const rookKey = `${color}-rook-${rookCol}`;
+
+  // La tour n'a pas bougé
+  if (hasMoved[rookKey]) return false;
+
+  // La tour est à sa position initiale
+  const expectedRook = isWhite ? '♖' : '♜';
+  if (board[fromRow][rookCol] !== expectedRook) return false;
+
+  // Cases entre roi et tour sont vides
+  const startCol = Math.min(fromCol, rookCol) + 1;
+  const endCol = Math.max(fromCol, rookCol) - 1;
+  for (let col = startCol; col <= endCol; col++) {
+    if (board[fromRow][col] !== null) return false;
+  }
+
+  // Le roi ne passe pas par une case attaquée
+  const kingPathCol = isKingside ? fromCol + 1 : fromCol - 1;
+  const enemyColor = color === 'white' ? 'black' : 'white';
+
+  // Vérifier la case intermédiaire
+  for (let col = Math.min(fromCol, kingPathCol); col <= Math.max(fromCol, kingPathCol); col++) {
+    if (isSquareAttacked(board, [fromRow, col], enemyColor)) return false;
+  }
+
+  // Vérifier la case d'arrivée du roi
+  if (isSquareAttacked(board, [toRow, toCol], enemyColor)) return false;
+
+  return true;
+}
+
+/**
+ * Vérifie si une case est attaquée par une pièce de la couleur donnée
+ * @param {Array} board - Le plateau d'échecs
+ * @param {Array} square - Position [row, col]
+ * @param {string} attackingColor - 'white' ou 'black'
+ * @returns {boolean} true si la case est attaquée
+ */
+function isSquareAttacked(board, square, attackingColor) {
+  for (let row = 0; row < 8; row++) {
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (piece !== null && isWhitePiece(piece) === (attackingColor === 'white')) {
+        if (canPieceAttackSquare(board, [row, col], square)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 // ============ FONCTION PRINCIPALE ============
@@ -246,9 +344,11 @@ function isValidKingMove(board, from, to) {
  * @param {Array} board - Le plateau d'échecs (8x8)
  * @param {Array} from - Position de départ [row, col]
  * @param {Array} to - Position d'arrivée [row, col]
+ * @param {Object} hasMoved - État des pièces qui ont bougé (optionnel, pour le roque)
+ * @param {Array} enPassantTarget - Position du pion pouvant être capturé en passant [row, col] ou null
  * @returns {boolean} true si le mouvement est valide
  */
-export function isValidMove(board, from, to) {
+export function isValidMove(board, from, to, hasMoved = null, enPassantTarget = null) {
   const [fromRow, fromCol] = from;
   const piece = board[fromRow][fromCol];
 
@@ -262,11 +362,17 @@ export function isValidMove(board, from, to) {
     return false;
   }
 
+  // Vérifier si c'est un roque (roi qui bouge de 2 cases horizontalement)
+  if ((piece === '♔' || piece === '♚') && Math.abs(to[1] - fromCol) === 2 && fromRow === to[0]) {
+    if (!hasMoved) return false; // hasMoved requis pour le roque
+    return isValidCastling(board, from, to, hasMoved);
+  }
+
   // Valider selon le type de pièce
   switch (piece) {
     case '♙':
     case '♟':
-      return isValidPawnMove(board, from, to);
+      return isValidPawnMove(board, from, to, enPassantTarget);
     case '♖':
     case '♜':
       return isValidRookMove(board, from, to);
