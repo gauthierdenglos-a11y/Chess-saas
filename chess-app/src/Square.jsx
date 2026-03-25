@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const pieceToImage = {
   '♙': '/Chess_plt45.svg',
@@ -16,6 +16,7 @@ const pieceToImage = {
 };
 
 const Square = ({ color, piece, isSelected, isPossible, isLastMove, onSquareClick }) => {
+  const [imageError, setImageError] = useState(false);
   const pieceImage = piece ? pieceToImage[piece] : null;
 
   const classes = ['square', color === 'white' ? 'white-square' : 'black-square'];
@@ -23,10 +24,21 @@ const Square = ({ color, piece, isSelected, isPossible, isLastMove, onSquareClic
   if (isPossible) classes.push('possible-square');
   if (isLastMove) classes.push('last-move-square');
 
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
   return (
     <button type="button" className={classes.join(' ')} onClick={onSquareClick}>
-      {pieceImage ? (
-        <img src={pieceImage} alt={piece} className="piece-image" />
+      {pieceImage && !imageError ? (
+        <img
+          src={pieceImage}
+          alt={piece}
+          className="piece-image"
+          onError={handleImageError}
+        />
+      ) : piece ? (
+        <span className="piece-text">{piece}</span>
       ) : (
         <span className="empty-slot" />
       )}

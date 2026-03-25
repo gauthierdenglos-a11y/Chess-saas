@@ -57,7 +57,6 @@ const ChessBoard = () => {
   const [gameStatus, setGameStatus] = useState(null);
   const [winner, setWinner] = useState(null);
   const [moveHistory, setMoveHistory] = useState([]);
-  const [theme, setTheme] = useState('dark');
   const [lastMove, setLastMove] = useState(null);
   // État pour tracker les pièces qui ont bougé (nécessaire pour le roque)
   const [hasMoved, setHasMoved] = useState(() => {
@@ -86,10 +85,6 @@ const ChessBoard = () => {
   const [enPassantTarget, setEnPassantTarget] = useState(null);
   // État pour la promotion du pion
   const [promotionPending, setPromotionPending] = useState(null); // {from: [row, col], to: [row, col], piece: '♙'}
-
-  const toggleTheme = () => {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
-  };
 
   const resetGame = () => {
     setBoard(getInitialBoard());
@@ -220,7 +215,6 @@ const ChessBoard = () => {
         setGameStatus(parsed.gameStatus);
         setWinner(parsed.winner);
         setMoveHistory(parsed.moveHistory || []);
-        setTheme(parsed.theme || 'dark');
         setEnPassantTarget(parsed.enPassantTarget || null);
         setPromotionPending(parsed.promotionPending || null);
       }
@@ -236,13 +230,12 @@ const ChessBoard = () => {
       gameStatus,
       winner,
       moveHistory,
-      theme,
       hasMoved,
       enPassantTarget,
       promotionPending,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [board, currentPlayer, isCheck, gameStatus, winner, moveHistory, theme, hasMoved, enPassantTarget, promotionPending]);
+  }, [board, currentPlayer, isCheck, gameStatus, winner, moveHistory, hasMoved, enPassantTarget, promotionPending]);
 
   // Fonction appelée quand on clique sur une case
   const handleSquareClick = (row, col) => {
@@ -422,17 +415,13 @@ const ChessBoard = () => {
   };
 
   return (
-    <div className={`chessboard-container ${theme}-theme`}>
+    <div className="chessboard-container">
       <div className="toolbar">
         <div className="info-row">
           <span>Joueur actuel : {currentPlayer === 'white' ? '⚪ Blanc' : '⚫ Noir'}</span>
           <span>Coup #{moveHistory.length}</span>
-          <span>Thème : {theme === 'dark' ? 'Sombre' : 'Clair'}</span>
         </div>
         <div className="button-row">
-          <button className="theme-toggle-btn" onClick={toggleTheme}>
-            Basculer en {theme === 'dark' ? 'clair' : 'sombre'}
-          </button>
           <button className="new-game-btn" onClick={resetGame}>
             Nouvelle partie
           </button>
