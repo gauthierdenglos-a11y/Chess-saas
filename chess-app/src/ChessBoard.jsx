@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Square from './Square';
 import { isValidMove, isKingInCheck, isMoveLeavesKingInCheck, isCheckmate, isStalemate } from './rules';
 
@@ -21,9 +21,15 @@ const getInitialBoard = () => [
  */
 function getPieceColor(piece) {
   if (!piece) return null;
-  // Les pièces blanches sont : ♔, ♕, ♖, ♘, ♗, ♙
   const whitePieces = ['♔', '♕', '♖', '♘', '♗', '♙'];
   return whitePieces.includes(piece) ? 'white' : 'black';
+}
+
+// Aide : transforme (row,col) en notation d'échecs 'a1'..
+function coordsToNotation(row, col) {
+  const file = String.fromCharCode('a'.charCodeAt(0) + col);
+  const rank = 8 - row;
+  return `${file}${rank}`;
 }
 
 const ChessBoard = () => {
@@ -31,20 +37,66 @@ const ChessBoard = () => {
   const [board, setBoard] = useState(getInitialBoard());
   // État pour la case sélectionnée : [row, col] ou null
   const [selectedSquare, setSelectedSquare] = useState(null);
-  // État pour tracker le joueur actuel (blanc joue en premier)
   const [currentPlayer, setCurrentPlayer] = useState('white');
-  // Coups possibles affichés quand une pièce est sélectionnée
   const [possibleMoves, setPossibleMoves] = useState([]);
-  // État pour tracker si le roi du joueur actuel est en échec
   const [isCheck, setIsCheck] = useState(false);
-  // État pour tracker la fin de la partie : null, 'checkmate', 'stalemate'
   const [gameStatus, setGameStatus] = useState(null);
-  // État pour tracker le gagnant (en cas de mat)
   const [winner, setWinner] = useState(null);
+  const [moveHistory, setMoveHistory] = useState([]);
+  const [theme, setTheme] = useState('dark');
+  const [lastMove, setLastMove] = useState(null);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  const resetGame = () => {
+    setBoard(getInitialBoard());
+    setSelectedSquare(null);
+    setPossibleMoves([]);
+    setCurrentPlayer('white');
+    setIsCheck(false);
+    setGameStatus(null);
+    setWinner(null);
+    setMoveHistory([]);
+    setLastMove(null);
+  };
+
+  const STORAGE_KEY = 'chess-app-state-v1';
+
+  // Charger l'état depuis localStorage au premier rendu
+  useEffect(() => {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.board && parsed.currentPlayer) {
+        setBoard(parsed.board);
+        setCurrentPlayer(parsed.currentPlayer);
+        setIsCheck(parsed.isCheck);
+        setGameStatus(parsed.gameStatus);
+        setWinner(parsed.winner);
+        setMoveHistory(parsed.moveHistory || []);
+        setTheme(parsed.theme || 'dark');
+      }
+    }
+  }, []);
+
+  // Sauvegarde dans localStorage quand l'état change
+  useEffect(() => {
+    const payload = {
+      board,
+      currentPlayer,
+      isCheck,
+      gameStatus,
+      winner,
+      moveHistory,
+      theme,
+    };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  }, [board, currentPlayer, isCheck, gameStatus, winner, moveHistory, theme]);
 
   // Fonction appelée quand on clique sur une case
   const handleSquareClick = (row, col) => {
-    // Si la partie est terminée, empêcher les mouvements
     if (gameStatus !== null) {
       return; // Partie terminée, pas de jouabilité
     }
@@ -81,9 +133,18 @@ const ChessBoard = () => {
         if (!isMoveLeavesKingInCheck(board, [selectedRow, selectedCol], [row, col], currentPlayer)) {
           // Mouvement valide et sûr : déplacer la pièce
           const newBoard = board.map(r => [...r]); // Copie profonde du plateau
-          newBoard[row][col] = newBoard[selectedRow][selectedCol]; // Déplacer la pièce
+          const movingPiece = newBoard[selectedRow][selectedCol];
+          const capturedPiece = newBoard[row][col];
+          newBoard[row][col] = movingPiece; // Déplacer la pièce
           newBoard[selectedRow][selectedCol] = null; // Vider l'ancienne case
           setBoard(newBoard); // Mettre à jour le plateau
+
+          // Historique du coup
+          const fromNotation = coordsToNotation(selectedRow, selectedCol);
+          const toNotation = coordsToNotation(row, col);
+          const moveNotation = `${movingPiece} ${fromNotation} → ${toNotation}${capturedPiece ? ` x ${capturedPiece}` : ''}`;
+          setMoveHistory(prevHistory => [...prevHistory, moveNotation]);
+          setLastMove({ from: [selectedRow, selectedCol], to: [row, col] });
 
           // Alterner le joueur
           const nextPlayer = currentPlayer === 'white' ? 'black' : 'white';
@@ -114,10 +175,21 @@ const ChessBoard = () => {
   };
 
   return (
-    <div className="chessboard-container">
-      {/* Affichage du joueur actuel */}
-      <div style={{ marginBottom: '20px', fontSize: '18px', fontWeight: 'bold' }}>
-        Joueur actuel : {currentPlayer === 'white' ? '⚪ Blanc' : '⚫ Noir'}
+    <div className={`chessboard-container ${theme}-theme`}>
+      <div className="toolbar">
+        <div className="info-row">
+          <span>Joueur actuel : {currentPlayer === 'white' ? '⚪ Blanc' : '⚫ Noir'}</span>
+          <span>Coup #{moveHistory.length}</span>
+          <span>Thème : {theme === 'dark' ? 'Sombre' : 'Clair'}</span>
+        </div>
+        <div className="button-row">
+          <button className="theme-toggle-btn" onClick={toggleTheme}>
+            Basculer en {theme === 'dark' ? 'clair' : 'sombre'}
+          </button>
+          <button className="new-game-btn" onClick={resetGame}>
+            Nouvelle partie
+          </button>
+        </div>
       </div>
 
       {/* Affichage de l'état d'échec */}
@@ -149,6 +221,11 @@ const ChessBoard = () => {
           row.map((piece, colIndex) => {
             const isWhite = (rowIndex + colIndex) % 2 === 0;
             const isSelected = selectedSquare && selectedSquare[0] === rowIndex && selectedSquare[1] === colIndex;
+            const moveIsLast = lastMove && (
+              (lastMove.from[0] === rowIndex && lastMove.from[1] === colIndex) ||
+              (lastMove.to[0] === rowIndex && lastMove.to[1] === colIndex)
+            );
+
             return (
               <Square
                 key={`${rowIndex}-${colIndex}`}
@@ -156,6 +233,7 @@ const ChessBoard = () => {
                 piece={piece}
                 isSelected={isSelected}
                 isPossible={possibleMoves.some(pos => pos[0] === rowIndex && pos[1] === colIndex)}
+                isLastMove={moveIsLast}
                 onSquareClick={() => handleSquareClick(rowIndex, colIndex)}
               />
             );
@@ -163,23 +241,18 @@ const ChessBoard = () => {
         )}
       </div>
 
-      {/* Bouton de réinitialisation */}
-      {gameStatus !== null && (
-        <button
-          className="new-game-btn"
-          onClick={() => {
-            setBoard(getInitialBoard());
-            setSelectedSquare(null);
-            setPossibleMoves([]);
-            setCurrentPlayer('white');
-            setIsCheck(false);
-            setGameStatus(null);
-            setWinner(null);
-          }}
-        >
-          Nouvelle partie
-        </button>
-      )}
+      <div className="history-container">
+        <h3>Historique des coups</h3>
+        {moveHistory.length === 0 ? (
+          <p>Aucun coup joué pour le moment.</p>
+        ) : (
+          <ol>
+            {moveHistory.map((move, index) => (
+              <li key={index}>{move}</li>
+            ))}
+          </ol>
+        )}
+      </div>
     </div>
   );
 };

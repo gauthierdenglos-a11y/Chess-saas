@@ -15,12 +15,13 @@ const pieceToImage = {
   '♚': '/Chess_kdt45.svg',
 };
 
-const Square = ({ color, piece, isSelected, isPossible, onSquareClick }) => {
+const Square = ({ color, piece, isSelected, isPossible, isLastMove, onSquareClick }) => {
   const pieceImage = piece ? pieceToImage[piece] : null;
 
   const classes = ['square', color === 'white' ? 'white-square' : 'black-square'];
   if (isSelected) classes.push('selected-square');
   if (isPossible) classes.push('possible-square');
+  if (isLastMove) classes.push('last-move-square');
 
   return (
     <button type="button" className={classes.join(' ')} onClick={onSquareClick}>
