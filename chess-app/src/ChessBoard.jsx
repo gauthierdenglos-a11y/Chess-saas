@@ -33,6 +33,8 @@ const ChessBoard = () => {
   const [selectedSquare, setSelectedSquare] = useState(null);
   // État pour tracker le joueur actuel (blanc joue en premier)
   const [currentPlayer, setCurrentPlayer] = useState('white');
+  // Coups possibles affichés quand une pièce est sélectionnée
+  const [possibleMoves, setPossibleMoves] = useState([]);
   // État pour tracker si le roi du joueur actuel est en échec
   const [isCheck, setIsCheck] = useState(false);
   // État pour tracker la fin de la partie : null, 'checkmate', 'stalemate'
@@ -55,6 +57,18 @@ const ChessBoard = () => {
         const pieceColor = getPieceColor(piece);
         if (pieceColor === currentPlayer) {
           setSelectedSquare([row, col]);
+
+          // Calculer les coups possibles (tous les toRow/toCol)
+          const nextMoves = [];
+          for (let toRow = 0; toRow < 8; toRow++) {
+            for (let toCol = 0; toCol < 8; toCol++) {
+              if (row === toRow && col === toCol) continue;
+              if (isValidMove(board, [row, col], [toRow, toCol]) && !isMoveLeavesKingInCheck(board, [row, col], [toRow, toCol], currentPlayer)) {
+                nextMoves.push([toRow, toCol]);
+              }
+            }
+          }
+          setPossibleMoves(nextMoves);
         }
       }
     } else {
@@ -95,11 +109,12 @@ const ChessBoard = () => {
         }
       }
       setSelectedSquare(null); // Désélectionner dans tous les cas
+      setPossibleMoves([]); // Effacer l'affichage des coups possibles
     }
   };
 
   return (
-    <div>
+    <div className="chessboard-container">
       {/* Affichage du joueur actuel */}
       <div style={{ marginBottom: '20px', fontSize: '18px', fontWeight: 'bold' }}>
         Joueur actuel : {currentPlayer === 'white' ? '⚪ Blanc' : '⚫ Noir'}
@@ -107,30 +122,14 @@ const ChessBoard = () => {
 
       {/* Affichage de l'état d'échec */}
       {isCheck && gameStatus === null && (
-        <div style={{
-          marginBottom: '15px',
-          padding: '10px',
-          backgroundColor: '#ff6b6b',
-          color: 'white',
-          borderRadius: '5px',
-          fontWeight: 'bold',
-          textAlign: 'center'
-        }}>
+        <div className="status-box status-check">
           ⚠️ ÉCHEC ! Le roi est attaqué !
         </div>
       )}
 
       {/* Affichage du checkmate */}
       {gameStatus === 'checkmate' && (
-        <div style={{
-          marginBottom: '15px',
-          padding: '15px',
-          backgroundColor: '#2d3436',
-          color: 'white',
-          borderRadius: '5px',
-          fontWeight: 'bold',
-          textAlign: 'center'
-        }}>
+        <div className="status-box status-checkmate">
           ♖ ÉCHEC ET MAT ! ♖<br />
           {winner === 'white' ? '⚪ Blanc' : '⚫ Noir'} a gagné !
         </div>
@@ -138,22 +137,14 @@ const ChessBoard = () => {
 
       {/* Affichage du stalemate */}
       {gameStatus === 'stalemate' && (
-        <div style={{
-          marginBottom: '15px',
-          padding: '15px',
-          backgroundColor: '#f39c12',
-          color: 'white',
-          borderRadius: '5px',
-          fontWeight: 'bold',
-          textAlign: 'center'
-        }}>
+        <div className="status-box status-stalemate">
           🤝 MATCH NUL (PAT) 🤝<br />
           Aucun joueur ne peut se déplacer sans mettre son roi en danger.
         </div>
       )}
       
       {/* Plateau d'échecs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 50px)', gridTemplateRows: 'repeat(8, 50px)' }}>
+      <div className="chessboard">
         {board.map((row, rowIndex) =>
           row.map((piece, colIndex) => {
             const isWhite = (rowIndex + colIndex) % 2 === 0;
@@ -164,6 +155,7 @@ const ChessBoard = () => {
                 color={isWhite ? 'white' : 'black'}
                 piece={piece}
                 isSelected={isSelected}
+                isPossible={possibleMoves.some(pos => pos[0] === rowIndex && pos[1] === colIndex)}
                 onSquareClick={() => handleSquareClick(rowIndex, colIndex)}
               />
             );
@@ -174,24 +166,15 @@ const ChessBoard = () => {
       {/* Bouton de réinitialisation */}
       {gameStatus !== null && (
         <button
+          className="new-game-btn"
           onClick={() => {
             setBoard(getInitialBoard());
             setSelectedSquare(null);
+            setPossibleMoves([]);
             setCurrentPlayer('white');
             setIsCheck(false);
             setGameStatus(null);
             setWinner(null);
-          }}
-          style={{
-            marginTop: '20px',
-            padding: '10px 20px',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            backgroundColor: '#27ae60',
-            color: 'white',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: 'pointer'
           }}
         >
           Nouvelle partie
