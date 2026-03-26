@@ -74,7 +74,7 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   line-height: 1.6;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .chess-app {
@@ -82,7 +82,7 @@ body {
   display: flex;
   background: var(--bg-primary);
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 /* Sidebar Styles */
@@ -225,6 +225,7 @@ body {
 .main-area {
   flex: 1;
   margin-left: 280px;
+  width: calc(100% - 280px);
   min-height: 100vh;
   transition: var(--transition);
   background: var(--bg-primary);
@@ -232,6 +233,7 @@ body {
 
 .main-area.sidebar-collapsed {
   margin-left: 80px;
+  width: calc(100% - 80px);
 }
 
 .main-content {
@@ -239,6 +241,48 @@ body {
   width: 100%;
   margin: 0 auto;
   min-height: 100vh;
+}
+
+.content-wrapper {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.home-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-page .content-wrapper {
+  width: 100%;
+}
+
+.home-page .hero-section {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+  min-height: auto;
+}
+
+.home-page .hero-content {
+  width: 100%;
+  max-width: 760px;
+}
+
+.home-page .hero-subtitle {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.home-page .hero-visual {
+  display: none;
+}
+
+.home-page .features-grid {
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* Hero Section */
@@ -1028,15 +1072,36 @@ body {
   }
 
   .sidebar {
-    transform: translateX(-100%);
+    width: 80px;
+    transform: none;
   }
 
-  .sidebar.open {
-    transform: translateX(0);
+  .sidebar.collapsed {
+    width: 80px;
+  }
+
+  .sidebar-title,
+  .nav-text {
+    display: none;
+  }
+
+  .sidebar-header,
+  .sidebar.collapsed .sidebar-header,
+  .nav-item,
+  .sidebar.collapsed .nav-item {
+    justify-content: center;
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
   .main-area {
-    margin-left: 0;
+    margin-left: 80px;
+    width: calc(100% - 80px);
+  }
+
+  .main-area.sidebar-collapsed {
+    margin-left: 80px;
+    width: calc(100% - 80px);
   }
 
   .hero-title {
@@ -1044,6 +1109,10 @@ body {
   }
 
   .features-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-page .features-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -1062,12 +1131,17 @@ body {
   }
 
   .sidebar {
-    width: 100%;
-    transform: translateX(-100%);
+    width: 70px;
   }
 
-  .sidebar.open {
-    transform: translateX(0);
+  .sidebar.collapsed {
+    width: 70px;
+  }
+
+  .main-area,
+  .main-area.sidebar-collapsed {
+    margin-left: 70px;
+    width: calc(100% - 70px);
   }
 
   .chessboard-container-main {

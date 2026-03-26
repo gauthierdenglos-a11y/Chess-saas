@@ -20,6 +20,10 @@ function App() {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
+  const navigateTo = (screen) => {
+    setCurrentScreen(screen);
+  };
+
   const Sidebar = () => (
     <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">
@@ -38,7 +42,7 @@ function App() {
       <nav className="sidebar-nav">
         <button
           className={`nav-item ${currentScreen === 'menu' ? 'active' : ''}`}
-          onClick={() => setCurrentScreen('menu')}
+          onClick={() => navigateTo('menu')}
         >
           <span className="nav-icon">🏠</span>
           {!sidebarCollapsed && <span className="nav-text">Accueil</span>}
@@ -46,7 +50,7 @@ function App() {
 
         <button
           className={`nav-item ${currentScreen === 'solo' ? 'active' : ''}`}
-          onClick={() => setCurrentScreen('solo')}
+          onClick={() => navigateTo('solo')}
         >
           <span className="nav-icon">👤</span>
           {!sidebarCollapsed && <span className="nav-text">Solo</span>}
@@ -54,7 +58,7 @@ function App() {
 
         <button
           className={`nav-item ${currentScreen === 'ai' ? 'active' : ''} disabled`}
-          onClick={() => setCurrentScreen('ai')}
+          onClick={() => navigateTo('ai')}
           disabled
         >
           <span className="nav-icon">🤖</span>
@@ -63,7 +67,7 @@ function App() {
 
         <button
           className={`nav-item ${currentScreen === 'settings' ? 'active' : ''}`}
-          onClick={() => setCurrentScreen('settings')}
+          onClick={() => navigateTo('settings')}
         >
           <span className="nav-icon">⚙️</span>
           {!sidebarCollapsed && <span className="nav-text">Paramètres</span>}
@@ -77,66 +81,49 @@ function App() {
   );
 
   const MainMenu = () => (
-    <div className="main-content">
-      <div className="hero-section">
-        <div className="hero-content">
-          <h1 className="hero-title">
-            <span className="hero-title-main">Chess Master</span>
-            <span className="hero-title-accent">2026</span>
-          </h1>
-          <p className="hero-subtitle">
-            L'expérience d'échecs ultime avec une interface moderne et intuitive
-          </p>
-        </div>
-        <div className="hero-visual">
-          <div className="floating-chess-pieces">
-            <span className="floating-piece piece-1">♔</span>
-            <span className="floating-piece piece-2">♕</span>
-            <span className="floating-piece piece-3">♖</span>
-            <span className="floating-piece piece-4">♗</span>
+    <div className="main-content home-page">
+      <div className="content-wrapper">
+        <div className="hero-section">
+          <div className="hero-content">
+            <h1 className="hero-title">
+              <span className="hero-title-main">Chess Master</span>
+              <span className="hero-title-accent">2026</span>
+            </h1>
+            <p className="hero-subtitle">
+              L'experience d'echecs ultime avec une interface moderne et intuitive
+            </p>
           </div>
         </div>
-      </div>
 
-      <div className="features-grid">
-        <div className="feature-card">
-          <div className="feature-icon">🎯</div>
-          <h3>Partie Solo</h3>
-          <p>Jouez tour par tour contre un adversaire humain avec toutes les règles complètes</p>
-          <button
-            className="feature-button primary"
-            onClick={() => setCurrentScreen('solo')}
-          >
-            Jouer maintenant
-          </button>
-        </div>
+        <div className="features-grid">
+          <div className="feature-card">
+            <div className="feature-icon">🎯</div>
+            <h3>Partie Solo</h3>
+            <p>Jouez tour par tour contre un adversaire humain avec toutes les regles completes.</p>
+            <button
+              className="feature-button primary"
+              onClick={() => navigateTo('solo')}
+            >
+              Jouer maintenant
+            </button>
+          </div>
 
-        <div className="feature-card coming-soon">
-          <div className="feature-icon">🤖</div>
-          <h3>Contre IA</h3>
-          <p>Affrontez l'intelligence artificielle avec différents niveaux de difficulté</p>
-          <button className="feature-button secondary" disabled>
-            Bientôt disponible
-          </button>
-        </div>
-
-        <div className="feature-card">
-          <div className="feature-icon">⚙️</div>
-          <h3>Paramètres</h3>
-          <p>Personnalisez votre expérience avec des thèmes et des options avancées</p>
-          <button
-            className="feature-button tertiary"
-            onClick={() => setCurrentScreen('settings')}
-          >
-            Configurer
-          </button>
+          <div className="feature-card coming-soon">
+            <div className="feature-icon">🤖</div>
+            <h3>Contre IA</h3>
+            <p>Affrontez l'intelligence artificielle avec differents niveaux de difficulte.</p>
+            <button className="feature-button secondary" disabled>
+              Bientot disponible
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 
   const SettingsScreen = () => (
-    <div className="main-content">
+    <div className="main-content settings-page">
+      <div className="content-wrapper">
       <div className="settings-header">
         <h1>Paramètres</h1>
         <p className="settings-subtitle">Personnalisez votre expérience de jeu</p>
@@ -154,11 +141,9 @@ function App() {
               <button
                 className={`theme-toggle-btn ${theme}`}
                 onClick={toggleTheme}
+                aria-label="Changer le theme"
               >
                 <span className="toggle-slider"></span>
-                <span className="toggle-text">
-                  {theme === 'dark' ? 'Sombre' : 'Clair'}
-                </span>
               </button>
             </div>
           </div>
@@ -191,6 +176,7 @@ function App() {
           </div>
         </div>
       </div>
+      </div>
     </div>
   );
 
@@ -200,26 +186,30 @@ function App() {
         return <MainMenu />;
       case 'solo':
         return (
-          <div className="main-content">
-            <div className="game-header">
-              <h1>Partie Solo</h1>
-              <p className="game-subtitle">Jouez contre un adversaire humain</p>
+          <div className="main-content game-page">
+            <div className="content-wrapper">
+              <div className="game-header">
+                <h1>Partie Solo</h1>
+                <p className="game-subtitle">Jouez contre un adversaire humain</p>
+              </div>
+              <ChessBoard />
             </div>
-            <ChessBoard />
           </div>
         );
       case 'ai':
         return (
           <div className="main-content">
-            <div className="coming-soon-screen">
-              <div className="coming-soon-content">
-                <div className="coming-soon-icon">🤖</div>
-                <h2>Mode IA à venir</h2>
-                <p>Le mode contre intelligence artificielle sera bientôt disponible avec différents niveaux de difficulté.</p>
-                <div className="coming-soon-features">
-                  <div className="feature-item">♟️ Niveaux de difficulté adaptatifs</div>
-                  <div className="feature-item">🧠 Algorithmes avancés</div>
-                  <div className="feature-item">📊 Analyse de partie</div>
+            <div className="content-wrapper">
+              <div className="coming-soon-screen">
+                <div className="coming-soon-content">
+                  <div className="coming-soon-icon">🤖</div>
+                  <h2>Mode IA à venir</h2>
+                  <p>Le mode contre intelligence artificielle sera bientot disponible avec differents niveaux de difficulte.</p>
+                  <div className="coming-soon-features">
+                    <div className="feature-item">Niveaux de difficulte adaptatifs</div>
+                    <div className="feature-item">Algorithmes avances</div>
+                    <div className="feature-item">Analyse de partie</div>
+                  </div>
                 </div>
               </div>
             </div>
