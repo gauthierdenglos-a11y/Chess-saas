@@ -402,10 +402,8 @@ const ChessBoard = () => {
   return (
     <div className="chessboard-container">
       <div className="toolbar">
-        <div className="info-row">
-          <span>Joueur actuel : {currentPlayer === 'white' ? '⚪ Blanc' : '⚫ Noir'}</span>
-          <span>Coup #{moveHistory.length}</span>
-        </div>
+        <span className="move-counter">Coup #{moveHistory.length}</span>
+        <span className="player-status">Joueur actuel : {currentPlayer === 'white' ? '⚪ Blanc' : '⚫ Noir'}</span>
         <div className="button-row">
           <button className="new-game-btn" onClick={resetGame}>
             Nouvelle partie
@@ -413,64 +411,68 @@ const ChessBoard = () => {
         </div>
       </div>
 
-      {/* Affichage de l'état d'échec */}
-      {isCheck && gameStatus === null && (
-        <div className="status-box status-check">
-          ⚠️ ÉCHEC ! Le roi est attaqué !
-        </div>
-      )}
+      <div className="status-stack">
+        {/* Affichage de l'état d'échec */}
+        {isCheck && gameStatus === null && (
+          <div className="status-box status-check">
+            ⚠️ ÉCHEC ! Le roi est attaqué !
+          </div>
+        )}
 
-      {/* Affichage du checkmate */}
-      {gameStatus === 'checkmate' && (
-        <div className="status-box status-checkmate">
-          ♖ ÉCHEC ET MAT ! ♖<br />
-          {winner === 'white' ? '⚪ Blanc' : '⚫ Noir'} a gagné !
-        </div>
-      )}
+        {/* Affichage du checkmate */}
+        {gameStatus === 'checkmate' && (
+          <div className="status-box status-checkmate">
+            ♖ ÉCHEC ET MAT ! ♖<br />
+            {winner === 'white' ? '⚪ Blanc' : '⚫ Noir'} a gagné !
+          </div>
+        )}
 
-      {/* Affichage du stalemate */}
-      {gameStatus === 'stalemate' && (
-        <div className="status-box status-stalemate">
-          🤝 MATCH NUL (PAT) 🤝<br />
-          Aucun joueur ne peut se déplacer sans mettre son roi en danger.
-        </div>
-      )}
+        {/* Affichage du stalemate */}
+        {gameStatus === 'stalemate' && (
+          <div className="status-box status-stalemate">
+            🤝 MATCH NUL (PAT) 🤝<br />
+            Aucun joueur ne peut se déplacer sans mettre son roi en danger.
+          </div>
+        )}
+      </div>
       
-      {/* Plateau d'échecs avec légende */}
-      <div className="chessboard-wrapper">
-        {/* Labels des rangées (1-8) à gauche */}
-        <div className="rank-labels">
-          {[8, 7, 6, 5, 4, 3, 2, 1].map(rank => (
-            <div key={rank} className="rank-label">{rank}</div>
-          ))}
-        </div>
+      <div className="board-area">
+        {/* Plateau d'échecs avec légende */}
+        <div className="chessboard-wrapper">
+          {/* Labels des rangées (1-8) à gauche */}
+          <div className="rank-labels">
+            {[8, 7, 6, 5, 4, 3, 2, 1].map(rank => (
+              <div key={rank} className="rank-label">{rank}</div>
+            ))}
+          </div>
 
-        {/* Conteneur principal du plateau */}
-        <div className="chessboard-container-main">
-          {/* Plateau d'échecs */}
-          <div className="chessboard">
-            {board.map((row, rowIndex) =>
-              row.map((piece, colIndex) => {
-                const isWhite = (rowIndex + colIndex) % 2 === 0;
-                const isSelected = selectedSquare && selectedSquare[0] === rowIndex && selectedSquare[1] === colIndex;
-                const moveIsLast = lastMove && (
-                  (lastMove.from[0] === rowIndex && lastMove.from[1] === colIndex) ||
-                  (lastMove.to[0] === rowIndex && lastMove.to[1] === colIndex)
-                );
+          {/* Conteneur principal du plateau */}
+          <div className="chessboard-container-main">
+            {/* Plateau d'échecs */}
+            <div className="chessboard">
+              {board.map((row, rowIndex) =>
+                row.map((piece, colIndex) => {
+                  const isWhite = (rowIndex + colIndex) % 2 === 0;
+                  const isSelected = selectedSquare && selectedSquare[0] === rowIndex && selectedSquare[1] === colIndex;
+                  const moveIsLast = lastMove && (
+                    (lastMove.from[0] === rowIndex && lastMove.from[1] === colIndex) ||
+                    (lastMove.to[0] === rowIndex && lastMove.to[1] === colIndex)
+                  );
 
-                return (
-                  <Square
-                    key={`${rowIndex}-${colIndex}`}
-                    color={isWhite ? 'white' : 'black'}
-                    piece={piece}
-                    isSelected={isSelected}
-                    isPossible={possibleMoves.some(pos => pos[0] === rowIndex && pos[1] === colIndex)}
-                    isLastMove={moveIsLast}
-                    onSquareClick={() => handleSquareClick(rowIndex, colIndex)}
-                  />
-                );
-              })
-            )}
+                  return (
+                    <Square
+                      key={`${rowIndex}-${colIndex}`}
+                      color={isWhite ? 'white' : 'black'}
+                      piece={piece}
+                      isSelected={isSelected}
+                      isPossible={possibleMoves.some(pos => pos[0] === rowIndex && pos[1] === colIndex)}
+                      isLastMove={moveIsLast}
+                      onSquareClick={() => handleSquareClick(rowIndex, colIndex)}
+                    />
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {/* Labels des colonnes (a-h) en bas */}
