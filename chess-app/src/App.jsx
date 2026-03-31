@@ -36,9 +36,8 @@ function Sidebar({ sidebarCollapsed, setSidebarCollapsed, currentScreen, navigat
         </button>
 
         <button
-          className={`nav-item ${currentScreen === 'ai' ? 'active' : ''} disabled`}
+          className={`nav-item ${currentScreen === 'ai' ? 'active' : ''}`}
           onClick={() => navigateTo('ai')}
-          disabled
         >
           <span className="nav-icon">🤖</span>
           {!sidebarCollapsed && <span className="nav-text">IA</span>}
@@ -93,8 +92,8 @@ function MainMenu({ navigateTo }) {
             <div className="feature-icon">🤖</div>
             <h3>Contre IA</h3>
             <p>Affrontez l'intelligence artificielle avec differents niveaux de difficulte.</p>
-            <button className="feature-button secondary" disabled>
-              Bientot disponible
+            <button className="feature-button secondary" onClick={() => navigateTo('ai')}>
+              Jouer contre IA
             </button>
           </div>
         </div>
@@ -198,26 +197,31 @@ function App() {
                 <h1>Partie Solo</h1>
                 <p className="game-subtitle">Jouez contre un adversaire humain</p>
               </div>
-              <ChessBoard />
+              <ChessBoard
+                key="solo-board"
+                initialHumanVsAI={false}
+                defaultAiLevel="moyen"
+                enableAIControls={false}
+                storageKey="chess-app-state-solo-v1"
+              />
             </div>
           </div>
         );
       case 'ai':
         return (
-          <div className="main-content">
+          <div className="main-content game-page">
             <div className="content-wrapper">
-              <div className="coming-soon-screen">
-                <div className="coming-soon-content">
-                  <div className="coming-soon-icon">🤖</div>
-                  <h2>Mode IA à venir</h2>
-                  <p>Le mode contre intelligence artificielle sera bientot disponible avec differents niveaux de difficulte.</p>
-                  <div className="coming-soon-features">
-                    <div className="feature-item">Niveaux de difficulte adaptatifs</div>
-                    <div className="feature-item">Algorithmes avances</div>
-                    <div className="feature-item">Analyse de partie</div>
-                  </div>
-                </div>
+              <div className="game-header">
+                <h1>Contre l'IA</h1>
+                <p className="game-subtitle">Vous jouez les blancs, Stockfish joue les noirs</p>
               </div>
+              <ChessBoard
+                key="ai-board"
+                initialHumanVsAI
+                defaultAiLevel="moyen"
+                enableAIControls
+                storageKey="chess-app-state-ai-v1"
+              />
             </div>
           </div>
         );
