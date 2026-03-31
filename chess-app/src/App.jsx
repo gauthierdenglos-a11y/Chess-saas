@@ -2,29 +2,8 @@ import React, { useState, useEffect } from 'react';
 import ChessBoard from './ChessBoard';
 import './App.css';
 
-function App() {
-  const [currentScreen, setCurrentScreen] = useState('menu'); // 'menu', 'solo', 'ai', 'settings'
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('chess-theme');
-    return saved || 'dark';
-  });
-
-  // Sauvegarder le thème dans localStorage
-  useEffect(() => {
-    localStorage.setItem('chess-theme', theme);
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
-
-  const navigateTo = (screen) => {
-    setCurrentScreen(screen);
-  };
-
-  const Sidebar = () => (
+function Sidebar({ sidebarCollapsed, setSidebarCollapsed, currentScreen, navigateTo }) {
+  return (
     <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">
         <button
@@ -79,8 +58,10 @@ function App() {
       </div>
     </div>
   );
+}
 
-  const MainMenu = () => (
+function MainMenu({ navigateTo }) {
+  return (
     <div className="main-content home-page">
       <div className="content-wrapper">
         <div className="hero-section">
@@ -120,70 +101,95 @@ function App() {
       </div>
     </div>
   );
+}
 
-  const SettingsScreen = () => (
+function SettingsScreen({ theme, toggleTheme }) {
+  return (
     <div className="main-content settings-page">
       <div className="content-wrapper">
-      <div className="settings-header">
-        <h1>Paramètres</h1>
-        <p className="settings-subtitle">Personnalisez votre expérience de jeu</p>
-      </div>
+        <div className="settings-header">
+          <h1>Paramètres</h1>
+          <p className="settings-subtitle">Personnalisez votre expérience de jeu</p>
+        </div>
 
-      <div className="settings-grid">
-        <div className="settings-section">
-          <h2 className="section-title">Apparence</h2>
-          <div className="setting-item">
-            <div className="setting-info">
-              <h3>Thème</h3>
-              <p>Choisissez entre le thème sombre ou clair</p>
+        <div className="settings-grid">
+          <div className="settings-section">
+            <h2 className="section-title">Apparence</h2>
+            <div className="setting-item">
+              <div className="setting-info">
+                <h3>Thème</h3>
+                <p>Choisissez entre le thème sombre ou clair</p>
+              </div>
+              <div className="setting-control">
+                <button
+                  className={`theme-toggle-btn ${theme}`}
+                  onClick={toggleTheme}
+                  aria-label="Changer le theme"
+                >
+                  <span className="toggle-slider"></span>
+                </button>
+              </div>
             </div>
-            <div className="setting-control">
-              <button
-                className={`theme-toggle-btn ${theme}`}
-                onClick={toggleTheme}
-                aria-label="Changer le theme"
-              >
-                <span className="toggle-slider"></span>
-              </button>
+          </div>
+
+          <div className="settings-section">
+            <h2 className="section-title">Jeu</h2>
+            <div className="setting-item">
+              <div className="setting-info">
+                <h3>Mode IA</h3>
+                <p>Niveau de difficulté de l'intelligence artificielle</p>
+              </div>
+              <div className="setting-control">
+                <select className="setting-select" disabled>
+                  <option>Facile</option>
+                  <option>Moyen</option>
+                  <option>Difficile</option>
+                  <option>Expert</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="settings-section">
+            <h2 className="section-title">À propos</h2>
+            <div className="about-info">
+              <p><strong>Chess Master 2026</strong></p>
+              <p>Application d'échecs moderne avec interface intuitive</p>
+              <p className="version">Version 1.0.0</p>
             </div>
           </div>
         </div>
-
-        <div className="settings-section">
-          <h2 className="section-title">Jeu</h2>
-          <div className="setting-item">
-            <div className="setting-info">
-              <h3>Mode IA</h3>
-              <p>Niveau de difficulté de l'intelligence artificielle</p>
-            </div>
-            <div className="setting-control">
-              <select className="setting-select" disabled>
-                <option>Facile</option>
-                <option>Moyen</option>
-                <option>Difficile</option>
-                <option>Expert</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="settings-section">
-          <h2 className="section-title">À propos</h2>
-          <div className="about-info">
-            <p><strong>Chess Master 2026</strong></p>
-            <p>Application d'échecs moderne avec interface intuitive</p>
-            <p className="version">Version 1.0.0</p>
-          </div>
-        </div>
-      </div>
       </div>
     </div>
   );
+}
+
+function App() {
+  const [currentScreen, setCurrentScreen] = useState('menu'); // 'menu', 'solo', 'ai', 'settings'
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('chess-theme');
+    return saved || 'dark';
+  });
+
+  // Sauvegarder le thème dans localStorage
+  useEffect(() => {
+    localStorage.setItem('chess-theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+
+  const navigateTo = (screen) => {
+    setCurrentScreen(screen);
+  };
 
   const renderScreen = () => {
     switch (currentScreen) {
       case 'menu':
-        return <MainMenu />;
+        return <MainMenu navigateTo={navigateTo} />;
       case 'solo':
         return (
           <div className="main-content game-page">
@@ -216,15 +222,20 @@ function App() {
           </div>
         );
       case 'settings':
-        return <SettingsScreen />;
+        return <SettingsScreen theme={theme} toggleTheme={toggleTheme} />;
       default:
-        return <MainMenu />;
+        return <MainMenu navigateTo={navigateTo} />;
     }
   };
 
   return (
     <div className={`chess-app ${theme}-theme`}>
-      <Sidebar />
+      <Sidebar
+        sidebarCollapsed={sidebarCollapsed}
+        setSidebarCollapsed={setSidebarCollapsed}
+        currentScreen={currentScreen}
+        navigateTo={navigateTo}
+      />
       <div className={`main-area ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
         {renderScreen()}
       </div>

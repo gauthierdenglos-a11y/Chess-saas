@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Square from './Square';
 import { isValidMove, isKingInCheck, isMoveLeavesKingInCheck, isCheckmate, isStalemate } from './rules';
 
@@ -34,57 +34,67 @@ function coordsToNotation(row, col) {
 
 // Fonction helper pour obtenir la clé hasMoved d'une pièce
 function getHasMovedKey(piece, row, col) {
-  const color = piece === piece.toUpperCase() ? 'white' : 'black';
-  if (piece.toLowerCase() === '♔' || piece.toLowerCase() === '♚') {
+  const color = getPieceColor(piece);
+  if (!color) return null;
+
+  if (piece === '♔' || piece === '♚') {
     return `${color}-king`;
   }
-  if (piece.toLowerCase() === '♖' || piece.toLowerCase() === '♜') {
+  if (piece === '♖' || piece === '♜') {
     return `${color}-rook-${col}`;
   }
   return null; // Autres pièces n'ont pas besoin de tracking pour le roque
 }
 
+function getDefaultHasMoved() {
+  return {
+    'white-king': false,
+    'white-rook-0': false,
+    'white-rook-7': false,
+    'black-king': false,
+    'black-rook-0': false,
+    'black-rook-7': false,
+  };
+}
+
+function loadStoredGameState(storageKey) {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const stored = window.localStorage.getItem(storageKey);
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return null;
+  }
+}
+
 const ChessBoard = () => {
   const STORAGE_KEY = 'chess-app-state-v1';
+  const initialState = useMemo(() => loadStoredGameState(STORAGE_KEY), []);
   
   // État pour stocker le plateau (matrice 8x8)
-  const [board, setBoard] = useState(getInitialBoard());
+  const [board, setBoard] = useState(() => initialState?.board || getInitialBoard());
   // État pour la case sélectionnée : [row, col] ou null
   const [selectedSquare, setSelectedSquare] = useState(null);
-  const [currentPlayer, setCurrentPlayer] = useState('white');
+  const [currentPlayer, setCurrentPlayer] = useState(() => initialState?.currentPlayer || 'white');
   const [possibleMoves, setPossibleMoves] = useState([]);
-  const [isCheck, setIsCheck] = useState(false);
-  const [gameStatus, setGameStatus] = useState(null);
-  const [winner, setWinner] = useState(null);
-  const [moveHistory, setMoveHistory] = useState([]);
+  const [isCheck, setIsCheck] = useState(() => initialState?.isCheck ?? false);
+  const [gameStatus, setGameStatus] = useState(() => initialState?.gameStatus ?? null);
+  const [winner, setWinner] = useState(() => initialState?.winner ?? null);
+  const [moveHistory, setMoveHistory] = useState(() => initialState?.moveHistory || []);
   const [lastMove, setLastMove] = useState(null);
   // État pour tracker les pièces qui ont bougé (nécessaire pour le roque)
-  const [hasMoved, setHasMoved] = useState(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      return parsed.hasMoved || {
-        'white-king': false,
-        'white-rook-0': false,
-        'white-rook-7': false,
-        'black-king': false,
-        'black-rook-0': false,
-        'black-rook-7': false,
-      };
-    }
-    return {
-      'white-king': false,
-      'white-rook-0': false,
-      'white-rook-7': false,
-      'black-king': false,
-      'black-rook-0': false,
-      'black-rook-7': false,
-    };
-  });
+  const [hasMoved, setHasMoved] = useState(() => initialState?.hasMoved || getDefaultHasMoved());
   // État pour la capture en passant
-  const [enPassantTarget, setEnPassantTarget] = useState(null);
+  const [enPassantTarget, setEnPassantTarget] = useState(() => initialState?.enPassantTarget || null);
   // État pour la promotion du pion
-  const [promotionPending, setPromotionPending] = useState(null); // {from: [row, col], to: [row, col], piece: '♙'}
+  const [promotionPending, setPromotionPending] = useState(() => initialState?.promotionPending || null); // {from: [row, col], to: [row, col], piece: '♙'}
 
   const resetGame = () => {
     setBoard(getInitialBoard());
@@ -96,14 +106,7 @@ const ChessBoard = () => {
     setWinner(null);
     setMoveHistory([]);
     setLastMove(null);
-    setHasMoved({
-      'white-king': false,
-      'white-rook-0': false,
-      'white-rook-7': false,
-      'black-king': false,
-      'black-rook-0': false,
-      'black-rook-7': false,
-    });
+    setHasMoved(getDefaultHasMoved());
     setEnPassantTarget(null);
     setPromotionPending(null);
   };
@@ -190,11 +193,11 @@ const ChessBoard = () => {
     setCurrentPlayer(nextPlayer);
 
     // Vérifier l'état du jeu pour le joueur suivant
-    if (isCheckmate(newBoard, nextPlayer)) {
+    if (isCheckmate(newBoard, nextPlayer, newHasMoved, null)) {
       setGameStatus('checkmate');
       setWinner(currentPlayer);
       setIsCheck(true);
-    } else if (isStalemate(newBoard, nextPlayer)) {
+    } else if (isStalemate(newBoard, nextPlayer, newHasMoved, null)) {
       setGameStatus('stalemate');
       setWinner(null);
       setIsCheck(false);
@@ -202,24 +205,6 @@ const ChessBoard = () => {
       setIsCheck(isKingInCheck(newBoard, nextPlayer));
     }
   };
-
-  // Charger l'état depuis localStorage au premier rendu
-  useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed.board && parsed.currentPlayer) {
-        setBoard(parsed.board);
-        setCurrentPlayer(parsed.currentPlayer);
-        setIsCheck(parsed.isCheck);
-        setGameStatus(parsed.gameStatus);
-        setWinner(parsed.winner);
-        setMoveHistory(parsed.moveHistory || []);
-        setEnPassantTarget(parsed.enPassantTarget || null);
-        setPromotionPending(parsed.promotionPending || null);
-      }
-    }
-  }, []);
 
   // Sauvegarde dans localStorage quand l'état change
   useEffect(() => {
@@ -391,13 +376,13 @@ const ChessBoard = () => {
 
             // Vérifier l'état du jeu pour le joueur suivant
             // Vérification 1 : Est-ce un échec et mat ?
-            if (isCheckmate(newBoard, nextPlayer)) {
+            if (isCheckmate(newBoard, nextPlayer, newHasMoved, newEnPassantTarget)) {
               setGameStatus('checkmate');
               setWinner(currentPlayer); // Le joueur actuel gagne
               setIsCheck(true); // Le roi est en échec (maj)
             }
             // Vérification 2 : Est-ce un match nul (pat) ?
-            else if (isStalemate(newBoard, nextPlayer)) {
+            else if (isStalemate(newBoard, nextPlayer, newHasMoved, newEnPassantTarget)) {
               setGameStatus('stalemate');
               setWinner(null); // Match nul
               setIsCheck(false);

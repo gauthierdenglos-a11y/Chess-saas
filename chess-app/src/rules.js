@@ -522,9 +522,11 @@ export function isMoveLeavesKingInCheck(board, from, to, playerColor) {
  * Très important pour détecter mat et pat
  * @param {Array} board - Le plateau d'échecs
  * @param {string} color - 'white' ou 'black'
+ * @param {Object|null} hasMoved - État des pièces ayant bougé (roque)
+ * @param {Array|null} enPassantTarget - Cible en passant actuelle
  * @returns {boolean} true si le joueur a au moins un coup valide
  */
-export function hasAnyValidMove(board, color) {
+export function hasAnyValidMove(board, color, hasMoved = null, enPassantTarget = null) {
   // Parcourir tout le plateau
   for (let fromRow = 0; fromRow < 8; fromRow++) {
     for (let fromCol = 0; fromCol < 8; fromCol++) {
@@ -544,7 +546,7 @@ export function hasAnyValidMove(board, color) {
           }
 
           // Vérifier si le coup est légal
-          if (isValidMove(board, [fromRow, fromCol], [toRow, toCol])) {
+          if (isValidMove(board, [fromRow, fromCol], [toRow, toCol], hasMoved, enPassantTarget)) {
             // Vérifier si le coup est sûr (ne laisse pas le roi en échec)
             if (!isMoveLeavesKingInCheck(board, [fromRow, fromCol], [toRow, toCol], color)) {
               return true; // Au moins un coup valide trouvé
@@ -565,16 +567,18 @@ export function hasAnyValidMove(board, color) {
  * - Aucun coup valide n'existe
  * @param {Array} board - Le plateau d'échecs
  * @param {string} color - 'white' ou 'black'
+ * @param {Object|null} hasMoved - État des pièces ayant bougé (roque)
+ * @param {Array|null} enPassantTarget - Cible en passant actuelle
  * @returns {boolean} true si c'est le mat
  */
-export function isCheckmate(board, color) {
+export function isCheckmate(board, color, hasMoved = null, enPassantTarget = null) {
   // Le roi doit être en échec
   if (!isKingInCheck(board, color)) {
     return false; // Pas en échec = pas de mat possible
   }
 
   // Aucun coup valide ne doit exister
-  return !hasAnyValidMove(board, color);
+  return !hasAnyValidMove(board, color, hasMoved, enPassantTarget);
 }
 
 /**
@@ -585,14 +589,16 @@ export function isCheckmate(board, color) {
  * C'est une situation où le joueur ne peut pas jouer mais n'est pas menacé
  * @param {Array} board - Le plateau d'échecs
  * @param {string} color - 'white' ou 'black'
+ * @param {Object|null} hasMoved - État des pièces ayant bougé (roque)
+ * @param {Array|null} enPassantTarget - Cible en passant actuelle
  * @returns {boolean} true si c'est un pat (match nul)
  */
-export function isStalemate(board, color) {
+export function isStalemate(board, color, hasMoved = null, enPassantTarget = null) {
   // Le roi ne doit PAS être en échec
   if (isKingInCheck(board, color)) {
     return false; // En échec = pas de pat possible
   }
 
   // Aucun coup valide ne doit exister
-  return !hasAnyValidMove(board, color);
+  return !hasAnyValidMove(board, color, hasMoved, enPassantTarget);
 }
