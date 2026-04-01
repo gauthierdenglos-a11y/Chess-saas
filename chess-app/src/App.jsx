@@ -14,7 +14,10 @@ function Sidebar({ sidebarCollapsed, setSidebarCollapsed, currentScreen, navigat
           {sidebarCollapsed ? '☰' : '✕'}
         </button>
         {!sidebarCollapsed && (
-          <h2 className="sidebar-title">Chess Master</h2>
+          <div className="sidebar-brand">
+            <h2 className="sidebar-title">Liquid Chess</h2>
+            <p className="sidebar-subtitle">Edition Studio</p>
+          </div>
         )}
       </div>
 
@@ -65,12 +68,14 @@ function MainMenu({ navigateTo }) {
       <div className="content-wrapper">
         <div className="hero-section">
           <div className="hero-content">
+            <p className="hero-kicker">Immersive Interface</p>
             <h1 className="hero-title">
-              <span className="hero-title-main">Chess Master</span>
-              <span className="hero-title-accent">2026</span>
+              <span className="hero-title-main">Liquid Glass</span>
+              <span className="hero-title-accent">Chess Studio</span>
             </h1>
             <p className="hero-subtitle">
-              L'experience d'echecs ultime avec une interface moderne et intuitive
+              Une experience d'echecs inspiree des interfaces Apple, avec transparence,
+              profondeur et details cinematographiques.
             </p>
           </div>
         </div>
@@ -234,6 +239,11 @@ function App() {
 
   return (
     <div className={`chess-app ${theme}-theme`}>
+      <div className="ambient-layer" aria-hidden="true">
+        <span className="ambient-orb orb-1" />
+        <span className="ambient-orb orb-2" />
+        <span className="ambient-orb orb-3" />
+      </div>
       <Sidebar
         sidebarCollapsed={sidebarCollapsed}
         setSidebarCollapsed={setSidebarCollapsed}
