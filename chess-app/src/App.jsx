@@ -68,10 +68,8 @@ function MainMenu({ navigateTo }) {
       <div className="content-wrapper">
         <div className="hero-section">
           <div className="hero-content">
-            <p className="hero-kicker">Immersive Interface</p>
             <h1 className="hero-title">
-              <span className="hero-title-main">Liquid Glass</span>
-              <span className="hero-title-accent">Chess Studio</span>
+              <span className="hero-title-main">Chess Studio</span>
             </h1>
             <p className="hero-subtitle">
               Une experience d'echecs inspiree des interfaces Apple, avec transparence,

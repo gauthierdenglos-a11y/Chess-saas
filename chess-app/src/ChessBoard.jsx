@@ -33,6 +33,26 @@ const PIECE_VALUE = {
   '♞': 3,
   '♟': 1,
 };
+const INITIAL_PIECE_COUNTS = {
+  white: {
+    '♕': 1,
+    '♖': 2,
+    '♗': 2,
+    '♘': 2,
+    '♙': 8,
+  },
+  black: {
+    '♛': 1,
+    '♜': 2,
+    '♝': 2,
+    '♞': 2,
+    '♟': 8,
+  },
+};
+const CAPTURE_DISPLAY_ORDER = {
+  white: ['♕', '♖', '♗', '♘', '♙'],
+  black: ['♛', '♜', '♝', '♞', '♟'],
+};
 const AI_LEVEL_MOVETIME = {
   facile: 120,
   moyen: 400,
@@ -303,6 +323,49 @@ const ChessBoard = ({
   const [aiEngineError, setAiEngineError] = useState('');
   const [aiBackend, setAiBackend] = useState(enableAIControls ? 'stockfish' : 'none');
   const [workerGeneration, setWorkerGeneration] = useState(0);
+
+  const capturedPieces = useMemo(() => {
+    const remaining = {
+      white: {},
+      black: {},
+    };
+
+    for (let row = 0; row < 8; row += 1) {
+      for (let col = 0; col < 8; col += 1) {
+        const piece = board[row][col];
+        if (!piece) {
+          continue;
+        }
+        const color = getPieceColor(piece);
+        if (!color) {
+          continue;
+        }
+        remaining[color][piece] = (remaining[color][piece] || 0) + 1;
+      }
+    }
+
+    const capturedByBlack = [];
+    const capturedByWhite = [];
+
+    CAPTURE_DISPLAY_ORDER.white.forEach((piece) => {
+      const missingCount = (INITIAL_PIECE_COUNTS.white[piece] || 0) - (remaining.white[piece] || 0);
+      for (let i = 0; i < missingCount; i += 1) {
+        capturedByBlack.push(piece);
+      }
+    });
+
+    CAPTURE_DISPLAY_ORDER.black.forEach((piece) => {
+      const missingCount = (INITIAL_PIECE_COUNTS.black[piece] || 0) - (remaining.black[piece] || 0);
+      for (let i = 0; i < missingCount; i += 1) {
+        capturedByWhite.push(piece);
+      }
+    });
+
+    return {
+      byWhite: capturedByWhite,
+      byBlack: capturedByBlack,
+    };
+  }, [board]);
 
   const clearAITimeout = useCallback(() => {
     if (aiTimeoutRef.current !== null) {
@@ -742,11 +805,8 @@ const ChessBoard = ({
     let currentWorker = null;
 
     const baseUrl = import.meta.env.BASE_URL || '/';
-    const engineScript = new URL(`${baseUrl}stockfish-18-lite-single.js`, window.location.href).toString();
-    const engineWasm = new URL(`${baseUrl}stockfish-18-lite-single.wasm`, window.location.href).toString();
-    const directEngineWorker = `${engineScript}#${encodeURIComponent(engineWasm)},worker`;
     const bridgeWorker = new URL(`${baseUrl}stockfish-worker.js`, window.location.href).toString();
-    const candidates = [directEngineWorker, bridgeWorker];
+    const candidates = [bridgeWorker];
 
     const clearReadyTimer = () => {
       if (readyTimer !== null) {
@@ -769,7 +829,13 @@ const ChessBoard = ({
       }
 
       let engineReady = false;
-      const worker = new Worker(candidates[index]);
+      let worker;
+      try {
+        worker = new Worker(candidates[index]);
+      } catch {
+        tryStartCandidate(index + 1);
+        return;
+      }
       currentWorker = worker;
       workerRef.current = worker;
 
@@ -793,74 +859,85 @@ const ChessBoard = ({
       };
 
       worker.onmessage = (event) => {
-      const payload = event?.data;
+        const payload = event?.data;
 
-      // Le moteur stockfish-18-lite-single.js envoie uniquement des strings UCI brutes.
-      if (typeof payload !== 'string') return;
-
-      const line = payload.trim();
-      if (!line) return;
-
-      // readyok : moteur pret
-      if (line.toLowerCase() === 'readyok') {
-        engineReady = true;
-        clearReadyTimer();
-        setAiBackend('stockfish');
-        setAiEngineReady(true);
-        setAiEngineError('');
-        return;
-      }
-
-      // bestmove e2e4 [ponder e7e5]
-      if (line.startsWith('bestmove ')) {
-        if (activeAIRequestRef.current === null) return;
-
-        const bParts = line.split(/\s+/);
-        const bestUci = bParts[1];
-
-        if (!bestUci || bestUci === '(none)' || bestUci === '0000') {
+        if (payload && typeof payload === 'object' && payload.type === 'error') {
+          const message = typeof payload.message === 'string' ? payload.message : 'Moteur IA indisponible.';
+          if (!engineReady) {
+            moveToNextCandidate(message);
+            return;
+          }
           markAIIdle();
+          setAiEngineReady(false);
+          setAiEngineError(message);
           return;
         }
 
-        const levelCfg = aiLevelConfigRef.current || AI_LEVEL_CONFIG.moyen;
-        const topMoves = Array.from(aiCandidatesByRankRef.current.entries())
-          .sort((a, b) => a[0] - b[0])
-          .map((entry) => entry[1]);
-        const selectedMove = pickMoveByLevel(
-          levelCfg,
-          topMoves,
-          bestUci.toLowerCase(),
-          aiLegalMovesRef.current,
-        );
-
-        markAIIdle();
-
-        const tryApplyMove = (move) => {
-          if (!move) return false;
-          try { return Boolean(applyMoveFromUciRef.current(move)); } catch { return false; }
-        };
-
-        const moveOptions = [selectedMove, bestUci.toLowerCase(), ...aiLegalMovesRef.current];
-        const applied = moveOptions.some(
-          (move, index) => move && moveOptions.indexOf(move) === index && tryApplyMove(move),
-        );
-
-        if (!applied) {
-          setAiEngineReady(false);
-          setAiEngineError('Le moteur IA a renvoye un coup invalide.');
+        const line = typeof payload === 'string' ? payload.trim() : '';
+        if (!line) {
+          return;
         }
-        return;
-      }
 
-      // Lignes info multipv : candidats pour la selection par niveau
-      if (activeAIRequestRef.current !== null) {
-        const parsed = parseInfoLine(line);
-        if (parsed?.move) {
-          aiCandidatesByRankRef.current.set(parsed.rank, parsed.move);
+        // readyok : moteur pret
+        if (line.toLowerCase() === 'readyok') {
+          engineReady = true;
+          clearReadyTimer();
+          setAiBackend('stockfish');
+          setAiEngineReady(true);
+          setAiEngineError('');
+          return;
         }
-      }
-    };
+
+        // bestmove e2e4 [ponder e7e5]
+        if (line.startsWith('bestmove ')) {
+          if (activeAIRequestRef.current === null) return;
+
+          const bParts = line.split(/\s+/);
+          const bestUci = bParts[1];
+
+          if (!bestUci || bestUci === '(none)' || bestUci === '0000') {
+            markAIIdle();
+            return;
+          }
+
+          const levelCfg = aiLevelConfigRef.current || AI_LEVEL_CONFIG.moyen;
+          const topMoves = Array.from(aiCandidatesByRankRef.current.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map((entry) => entry[1]);
+          const selectedMove = pickMoveByLevel(
+            levelCfg,
+            topMoves,
+            bestUci.toLowerCase(),
+            aiLegalMovesRef.current,
+          );
+
+          markAIIdle();
+
+          const tryApplyMove = (move) => {
+            if (!move) return false;
+            try { return Boolean(applyMoveFromUciRef.current(move)); } catch { return false; }
+          };
+
+          const moveOptions = [selectedMove, bestUci.toLowerCase(), ...aiLegalMovesRef.current];
+          const applied = moveOptions.some(
+            (move, index) => move && moveOptions.indexOf(move) === index && tryApplyMove(move),
+          );
+
+          if (!applied) {
+            setAiEngineReady(false);
+            setAiEngineError('Le moteur IA a renvoye un coup invalide.');
+          }
+          return;
+        }
+
+        // Lignes info multipv : candidats pour la selection par niveau
+        if (activeAIRequestRef.current !== null) {
+          const parsed = parseInfoLine(line);
+          if (parsed?.move) {
+            aiCandidatesByRankRef.current.set(parsed.rank, parsed.move);
+          }
+        }
+      };
 
       worker.onerror = () => {
         if (!engineReady) {
@@ -1317,8 +1394,22 @@ const ChessBoard = ({
           </div>
         )}
       </div>
-      
+
       <div className="board-area">
+        <div className="board-stack">
+          <div className="capture-lane capture-lane-top" aria-label="Captures des noirs">
+            <p className="capture-label">Captures des noirs</p>
+            <div className="capture-pieces">
+              {capturedPieces.byBlack.length === 0 ? (
+                <span className="capture-empty">Aucune</span>
+              ) : (
+                capturedPieces.byBlack.map((piece, index) => (
+                  <span className="capture-piece" key={`black-captured-${piece}-${index}`}>{piece}</span>
+                ))
+              )}
+            </div>
+          </div>
+
         {/* Plateau d'échecs avec légende */}
         <div className="chessboard-wrapper">
           {/* Labels des rangées (1-8) à gauche */}
@@ -1362,6 +1453,20 @@ const ChessBoard = ({
             {['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(file => (
               <div key={file} className="file-label">{file}</div>
             ))}
+          </div>
+        </div>
+
+          <div className="capture-lane capture-lane-bottom" aria-label="Captures des blancs">
+            <p className="capture-label">Captures des blancs</p>
+            <div className="capture-pieces">
+              {capturedPieces.byWhite.length === 0 ? (
+                <span className="capture-empty">Aucune</span>
+              ) : (
+                capturedPieces.byWhite.map((piece, index) => (
+                  <span className="capture-piece" key={`white-captured-${piece}-${index}`}>{piece}</span>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>
