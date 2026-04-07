@@ -3,6 +3,32 @@
 // ============ FONCTIONS UTILITAIRES ============
 
 /**
+ * Cache simple pour isKingInCheck (LRU, max 100 entrées)
+ * Clé: stringified board + color
+ * Améliore drastiquement les perfs durant validation de mouvements
+ */
+const checkCache = new Map();
+const MAX_CACHE_SIZE = 100;
+
+function getCacheKey(board, color) {
+  // Stringify compact: chaque case en 1-2 chars
+  let key = color[0]; // 'w' ou 'b'
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 8; j++) {
+      const piece = board[i][j];
+      key += piece ? piece : '.';
+    }
+  }
+  return key;
+}
+
+function clearCheckCache() {
+  checkCache.clear();
+}
+
+export { clearCheckCache };
+
+/**
  * Détermine si une pièce est blanche ou noire
  * @param {string} piece - Caractère Unicode de la pièce
  * @returns {boolean} true si blanc, false si noir
@@ -461,15 +487,28 @@ function canPieceAttackSquare(board, from, to) {
 /**
  * Vérifie si le roi d'une couleur est en échec
  * Le roi est en échec si une pièce adverse peut l'attaquer
+ * Utilise un cache LRU pour optimiser les appels répétés
  * @param {Array} board - Le plateau d'échecs
  * @param {string} color - 'white' ou 'black'
  * @returns {boolean} true si le roi est en échec
  */
 export function isKingInCheck(board, color) {
+  // Vérifier le cache
+  const cacheKey = getCacheKey(board, color);
+  if (checkCache.has(cacheKey)) {
+    return checkCache.get(cacheKey);
+  }
+
   // Trouver la position du roi
   const kingPosition = findKing(board, color);
   if (!kingPosition) {
-    return false; // Pas de roi (impossible)
+    const result = false;
+    checkCache.set(cacheKey, result);
+    if (checkCache.size > MAX_CACHE_SIZE) {
+      const firstKey = checkCache.keys().next().value;
+      checkCache.delete(firstKey);
+    }
+    return result;
   }
 
   const [kingRow, kingCol] = kingPosition;
@@ -484,13 +523,25 @@ export function isKingInCheck(board, color) {
       if (piece !== null && isWhitePiece(piece) === (enemyColor === 'white')) {
         // Vérifier si cette pièce peut attaquer le roi
         if (canPieceAttackSquare(board, [row, col], [kingRow, kingCol])) {
-          return true; // Le roi est en échec
+          const result = true;
+          checkCache.set(cacheKey, result);
+          if (checkCache.size > MAX_CACHE_SIZE) {
+            const firstKey = checkCache.keys().next().value;
+            checkCache.delete(firstKey);
+          }
+          return result;
         }
       }
     }
   }
 
-  return false; // Le roi n'est pas en échec
+  const result = false;
+  checkCache.set(cacheKey, result);
+  if (checkCache.size > MAX_CACHE_SIZE) {
+    const firstKey = checkCache.keys().next().value;
+    checkCache.delete(firstKey);
+  }
+  return result;
 }
 
 /**
