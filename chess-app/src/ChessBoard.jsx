@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Square from './Square';
 import { isValidMove, isKingInCheck, isMoveLeavesKingInCheck, isCheckmate, isStalemate, clearCheckCache } from './rules';
+import GameService from './gameService';
 
 const PIECE_TO_FEN = {
   '♔': 'K',
@@ -289,6 +290,9 @@ const ChessBoard = ({
   storageKey = 'chess-app-state-v1',
   onGameEnd = null, // (gameData) => void - appelé quand la partie se termine
   onResignation = null, // (resigningPlayer) => void - appelé quand un joueur abandonne
+  isMultiplayer = false,
+  multiplayerRoomId = null,
+  multiplayerPlayerColor = 'white',
 }) => {
   const initialState = useMemo(() => loadStoredGameState(storageKey), [storageKey]);
   const workerRef = useRef(null);
@@ -299,6 +303,8 @@ const ChessBoard = ({
   const aiCandidatesByRankRef = useRef(new Map());
   const aiLegalMovesRef = useRef([]);
   const aiLevelConfigRef = useRef(AI_LEVEL_CONFIG[defaultAiLevel] || AI_LEVEL_CONFIG.moyen);
+  const isApplyingRemoteStateRef = useRef(false);
+  const lastMultiplayerSignatureRef = useRef('');
   
   // État pour stocker le plateau (matrice 8x8)
   const [board, setBoard] = useState(() => initialState?.board || getInitialBoard());
@@ -345,6 +351,149 @@ const ChessBoard = ({
   const [aiEngineError, setAiEngineError] = useState('');
   const [aiBackend, setAiBackend] = useState(enableAIControls ? 'stockfish' : 'none');
   const [workerGeneration, setWorkerGeneration] = useState(0);
+
+  const applyMultiplayerRoomState = useCallback((room) => {
+    if (!room || !room.board || !Array.isArray(room.board)) {
+      return;
+    }
+
+    setBoard(room.board);
+    setCurrentPlayer(room.currentPlayer || 'white');
+    setMoveHistory(Array.isArray(room.moves) ? room.moves : []);
+    setHasMoved(room.hasMoved || getDefaultHasMoved());
+    setEnPassantTarget(room.enPassantTarget || null);
+    setLastMove(room.lastMove || null);
+    setGameStatus(room.gameStatus || null);
+    setWinner(room.winner || null);
+    setIsCheck(Boolean(room.isCheck));
+    setPromotionPending(null);
+    setSelectedSquare(null);
+    setPossibleMoves([]);
+
+    // Evite la divergence locale de l'historique undo/redo après un update distant.
+    setBoardHistory([room.board]);
+    setBoardHistoryIndex(0);
+    setStateHistory([{
+      currentPlayer: room.currentPlayer || 'white',
+      hasMoved: room.hasMoved || getDefaultHasMoved(),
+      enPassantTarget: room.enPassantTarget || null,
+      isCheck: Boolean(room.isCheck),
+      gameStatus: room.gameStatus || null,
+    }]);
+  }, []);
+
+  const buildMultiplayerSnapshot = useCallback(() => {
+    const status = gameStatus === null ? 'in_progress' : 'completed';
+
+    return {
+      board,
+      currentPlayer,
+      moves: moveHistory,
+      hasMoved,
+      enPassantTarget,
+      lastMove,
+      gameStatus,
+      winner,
+      isCheck,
+      status,
+      updatedAt: new Date().toISOString(),
+    };
+  }, [board, currentPlayer, moveHistory, hasMoved, enPassantTarget, lastMove, gameStatus, winner, isCheck]);
+
+  useEffect(() => {
+    if (!isMultiplayer || !multiplayerRoomId) {
+      return undefined;
+    }
+
+    let mounted = true;
+
+    const getSignatureFromRoom = (room) => {
+      return JSON.stringify({
+        board: room?.board || null,
+        currentPlayer: room?.currentPlayer || null,
+        moves: room?.moves || [],
+        hasMoved: room?.hasMoved || null,
+        enPassantTarget: room?.enPassantTarget || null,
+        gameStatus: room?.gameStatus || null,
+        winner: room?.winner || null,
+        isCheck: Boolean(room?.isCheck),
+      });
+    };
+
+    const hydrate = async () => {
+      const room = await GameService.getRoom(multiplayerRoomId);
+      if (!mounted || !room) {
+        return;
+      }
+
+      const signature = getSignatureFromRoom(room);
+      lastMultiplayerSignatureRef.current = signature;
+      isApplyingRemoteStateRef.current = true;
+      applyMultiplayerRoomState(room);
+      window.setTimeout(() => {
+        isApplyingRemoteStateRef.current = false;
+      }, 0);
+    };
+
+    hydrate();
+
+    const unsubscribe = GameService.onRoomChanges(multiplayerRoomId, (payload) => {
+      const room = payload?.new;
+      if (!room || !mounted) {
+        return;
+      }
+
+      const signature = getSignatureFromRoom(room);
+      if (signature === lastMultiplayerSignatureRef.current) {
+        return;
+      }
+
+      lastMultiplayerSignatureRef.current = signature;
+      isApplyingRemoteStateRef.current = true;
+      applyMultiplayerRoomState(room);
+      window.setTimeout(() => {
+        isApplyingRemoteStateRef.current = false;
+      }, 0);
+    });
+
+    return () => {
+      mounted = false;
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [applyMultiplayerRoomState, isMultiplayer, multiplayerRoomId]);
+
+  useEffect(() => {
+    if (!isMultiplayer || !multiplayerRoomId || isApplyingRemoteStateRef.current || promotionPending) {
+      return;
+    }
+
+    const snapshot = buildMultiplayerSnapshot();
+    const signature = JSON.stringify(snapshot);
+    if (signature === lastMultiplayerSignatureRef.current) {
+      return;
+    }
+
+    lastMultiplayerSignatureRef.current = signature;
+    GameService.updateRoomGame(multiplayerRoomId, snapshot).catch((err) => {
+      console.error('Error syncing multiplayer room:', err);
+    });
+  }, [
+    board,
+    buildMultiplayerSnapshot,
+    currentPlayer,
+    enPassantTarget,
+    gameStatus,
+    hasMoved,
+    isCheck,
+    isMultiplayer,
+    lastMove,
+    moveHistory,
+    multiplayerRoomId,
+    promotionPending,
+    winner,
+  ]);
 
   const capturedPieces = useMemo(() => {
     const remaining = {
@@ -1252,6 +1401,10 @@ const ChessBoard = ({
       return;
     }
 
+    if (isMultiplayer && currentPlayer !== multiplayerPlayerColor) {
+      return;
+    }
+
     // Ne rien faire si une promotion est en attente
     if (promotionPending) return;
 
@@ -1488,7 +1641,7 @@ const ChessBoard = ({
             type="button"
             className="toolbar-btn toolbar-btn-ghost"
             onClick={undo}
-            disabled={boardHistoryIndex === 0}
+            disabled={isMultiplayer || boardHistoryIndex === 0}
             title="Undo (Ctrl+Z)"
           >
             ↶ Undo
@@ -1498,7 +1651,7 @@ const ChessBoard = ({
             type="button"
             className="toolbar-btn toolbar-btn-ghost"
             onClick={redo}
-            disabled={boardHistoryIndex === boardHistory.length - 1}
+            disabled={isMultiplayer || boardHistoryIndex === boardHistory.length - 1}
             title="Redo (Ctrl+Y)"
           >
             ↷ Redo
@@ -1508,6 +1661,7 @@ const ChessBoard = ({
             type="button"
             className="toolbar-btn toolbar-btn-ghost"
             onClick={() => setFenModalOpen(true)}
+            disabled={isMultiplayer}
             title="Exporter/Importer FEN"
           >
             📋 FEN
@@ -1790,6 +1944,6 @@ const ChessBoard = ({
       </div>
     </div>
   );
-};
+  };
 
 export default ChessBoard;

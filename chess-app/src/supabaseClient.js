@@ -3,11 +3,13 @@
  * À configurer avec les vraies clés d'environnement après
  */
 
+import { createClient } from '@supabase/supabase-js';
+
 // Pour le MVP local, on simule Supabase avec localStorage
 class SupabaseSimulator {
   constructor() {
     this.games = this._loadGames();
-    this.rooms = new Map();
+    this.rooms = this._loadRooms();
   }
 
   _loadGames() {
@@ -23,6 +25,24 @@ class SupabaseSimulator {
     localStorage.setItem('chess-app-games-v1', JSON.stringify(this.games));
   }
 
+  _loadRooms() {
+    try {
+      const stored = localStorage.getItem('chess-app-rooms-v1');
+      const parsed = stored ? JSON.parse(stored) : [];
+      if (!Array.isArray(parsed)) {
+        return new Map();
+      }
+      return new Map(parsed.map((room) => [room.id, room]));
+    } catch {
+      return new Map();
+    }
+  }
+
+  _saveRooms() {
+    const roomsArray = Array.from(this.rooms.values());
+    localStorage.setItem('chess-app-rooms-v1', JSON.stringify(roomsArray));
+  }
+
   // Créer une partie
   createGame(gameData) {
     const game = {
@@ -32,7 +52,7 @@ class SupabaseSimulator {
     };
     this.games.push(game);
     this._saveGames();
-    return game;
+    return Promise.resolve({ data: game, error: null });
   }
 
   // Récupérer toutes les parties
@@ -59,37 +79,43 @@ class SupabaseSimulator {
 
   // Créer une room multijoueur
   createRoom(roomData) {
+    const roomId = roomData.id || `room-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
     const room = {
-      id: `room-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+      id: roomId,
       createdAt: new Date().toISOString(),
       ...roomData,
     };
     this.rooms.set(room.id, room);
-    return room;
+    this._saveRooms();
+    return Promise.resolve(room);
   }
 
   // Rejoindre une room
   getRoom(roomId) {
-    const room = this.rooms.get(roomId);
+    const normalizedRoomId = (roomId || '').trim().toUpperCase();
+    const room = this.rooms.get(normalizedRoomId);
     return Promise.resolve({ data: room, error: room ? null : 'Room not found' });
   }
 
   // Mettre à jour une room
   updateRoom(roomId, updates) {
-    const room = this.rooms.get(roomId);
+    const normalizedRoomId = (roomId || '').trim().toUpperCase();
+    const room = this.rooms.get(normalizedRoomId);
     if (!room) {
       return Promise.resolve({ error: 'Room not found' });
     }
     const updated = { ...room, ...updates };
-    this.rooms.set(roomId, updated);
+    this.rooms.set(normalizedRoomId, updated);
+    this._saveRooms();
     return Promise.resolve({ data: updated, error: null });
   }
 
   // Listener temps réel pour une room
   onRoomChange(roomId, callback) {
+    const normalizedRoomId = (roomId || '').trim().toUpperCase();
     // Simulation simple : polling toutes les 500ms
     const interval = setInterval(() => {
-      const room = this.rooms.get(roomId);
+      const room = this.rooms.get(normalizedRoomId);
       if (room) {
         callback({ new: room });
       }
@@ -99,7 +125,119 @@ class SupabaseSimulator {
   }
 }
 
+class SupabaseRemote {
+  constructor(url, anonKey) {
+    this.client = createClient(url, anonKey);
+  }
+
+  async createGame(gameData) {
+    const { data, error } = await this.client
+      .from('games')
+      .insert(gameData)
+      .select('*')
+      .single();
+
+    return { data, error: error?.message || null };
+  }
+
+  async getAllGames() {
+    const { data, error } = await this.client
+      .from('games')
+      .select('*')
+      .order('startedAt', { ascending: false });
+
+    return { data: data || [], error: error?.message || null };
+  }
+
+  async getGameById(id) {
+    const { data, error } = await this.client
+      .from('games')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    return { data: data || null, error: error?.message || null };
+  }
+
+  async updateGame(id, updates) {
+    const { data, error } = await this.client
+      .from('games')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    return { data, error: error?.message || null };
+  }
+
+  async createRoom(roomData) {
+    const { data, error } = await this.client
+      .from('rooms')
+      .insert(roomData)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw new Error(error.message || 'Erreur de création de room');
+    }
+
+    return data;
+  }
+
+  async getRoom(roomId) {
+    const normalizedRoomId = (roomId || '').trim().toUpperCase();
+    const { data, error } = await this.client
+      .from('rooms')
+      .select('*')
+      .eq('id', normalizedRoomId)
+      .maybeSingle();
+
+    return { data: data || null, error: error?.message || null };
+  }
+
+  async updateRoom(roomId, updates) {
+    const normalizedRoomId = (roomId || '').trim().toUpperCase();
+    const { data, error } = await this.client
+      .from('rooms')
+      .update({ ...updates, updatedAt: new Date().toISOString() })
+      .eq('id', normalizedRoomId)
+      .select('*')
+      .single();
+
+    return { data, error: error?.message || null };
+  }
+
+  onRoomChange(roomId, callback) {
+    const normalizedRoomId = (roomId || '').trim().toUpperCase();
+    const channel = this.client
+      .channel(`room-${normalizedRoomId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'rooms',
+          filter: `id=eq.${normalizedRoomId}`,
+        },
+        (payload) => callback(payload),
+      )
+      .subscribe();
+
+    return () => {
+      this.client.removeChannel(channel);
+    };
+  }
+}
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
+
+export const isUsingSupabaseRemote = hasSupabaseConfig;
+
 // Exporter le simulator pour le MVP
-export const supabase = new SupabaseSimulator();
+export const supabase = hasSupabaseConfig
+  ? new SupabaseRemote(supabaseUrl, supabaseAnonKey)
+  : new SupabaseSimulator();
 
 export default supabase;

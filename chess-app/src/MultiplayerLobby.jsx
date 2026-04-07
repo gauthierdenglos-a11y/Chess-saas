@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import GameService from './gameService';
 
 function MultiplayerLobby({ onGameStart }) {
@@ -10,6 +10,30 @@ function MultiplayerLobby({ onGameStart }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [createdRoomId, setCreatedRoomId] = useState('');
+
+  useEffect(() => {
+    if (!createdRoomId) {
+      return undefined;
+    }
+
+    const unsubscribe = GameService.onRoomChanges(createdRoomId, (payload) => {
+      const room = payload?.new;
+      if (!room) {
+        return;
+      }
+
+      if (room.status === 'in_progress' && room.playerBlack) {
+        onGameStart({
+          roomId: createdRoomId,
+          playerName,
+          playerColor: 'white',
+          gameData: room,
+        });
+      }
+    });
+
+    return unsubscribe;
+  }, [createdRoomId, onGameStart, playerName]);
 
   const handleNameChange = (e) => {
     const name = e.target.value;
@@ -55,13 +79,15 @@ function MultiplayerLobby({ onGameStart }) {
       const result = await GameService.joinRoom(roomCode, playerName);
       if (result.success) {
         onGameStart({
-          roomId: roomCode,
+          roomId: result.roomId,
           playerName,
           playerColor: 'black',
           gameData: result.room,
         });
       } else {
-        setError(result.error || 'Impossible de rejoindre la room');
+        const backendHint = result.error === 'Room not found'
+          ? ' Verifiez le code partage par l\'hote (6 caracteres).' : '';
+        setError((result.error || 'Impossible de rejoindre la room') + backendHint);
       }
     } catch (err) {
       setError(`Erreur: ${err.message}`);
@@ -163,6 +189,9 @@ function MultiplayerLobby({ onGameStart }) {
                 </button>
               </div>
               <p className="waiting-message">En attente d'un adversaire...</p>
+              <p className="waiting-message" style={{ fontSize: '0.85rem', opacity: 0.8 }}>
+                Astuce: le code de room contient 6 caracteres (ex: A1B2C3).
+              </p>
               <button
                 className="feature-button secondary"
                 onClick={() => {

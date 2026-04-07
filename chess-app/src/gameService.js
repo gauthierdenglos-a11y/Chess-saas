@@ -77,7 +77,9 @@ class GameService {
    * Créer une room multijoueur
    */
   static async createMultiplayerRoom(playerName) {
-    const room = supabase.createRoom({
+    const inviteCode = await this._generateUniqueInviteCode();
+    const room = await supabase.createRoom({
+      id: inviteCode,
       playerWhite: playerName,
       playerBlack: null,
       status: 'waiting_for_opponent', // 'waiting_for_opponent' | 'in_progress' | 'completed'
@@ -85,7 +87,7 @@ class GameService {
       currentPlayer: 'white',
       board: null,
       createdAt: new Date().toISOString(),
-      inviteCode: this._generateInviteCode(),
+      inviteCode,
     });
 
     return room;
@@ -94,8 +96,13 @@ class GameService {
   /**
    * Rejoindre une room
    */
-  static async joinRoom(roomId, playerName) {
-    const { data: room, error } = await supabase.getRoom(roomId);
+  static async joinRoom(roomCode, playerName) {
+    const normalizedCode = (roomCode || '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(normalizedCode)) {
+      return { success: false, error: 'Code de room invalide (6 caractères alphanumériques)' };
+    }
+
+    const { data: room, error } = await supabase.getRoom(normalizedCode);
     if (error || !room) {
       return { success: false, error: 'Room not found' };
     }
@@ -104,7 +111,7 @@ class GameService {
       return { success: false, error: 'Room is not available' };
     }
 
-    const { data: updated, error: updateError } = await supabase.updateRoom(roomId, {
+    const { data: updated, error: updateError } = await supabase.updateRoom(normalizedCode, {
       playerBlack: playerName,
       status: 'in_progress',
     });
@@ -113,7 +120,7 @@ class GameService {
       return { success: false, error: updateError };
     }
 
-    return { success: true, room: updated };
+    return { success: true, room: updated, roomId: normalizedCode };
   }
 
   /**
@@ -157,6 +164,18 @@ class GameService {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return code;
+  }
+
+  static async _generateUniqueInviteCode(maxAttempts = 10) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const candidate = this._generateInviteCode();
+      const { data: existingRoom } = await supabase.getRoom(candidate);
+      if (!existingRoom) {
+        return candidate;
+      }
+    }
+
+    throw new Error('Impossible de générer un code de room unique, veuillez réessayer');
   }
 
   /**

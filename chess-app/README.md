@@ -14,6 +14,24 @@ npm install
 npm run dev
 ```
 
+## Configuration Supabase (multijoueur multi-appareils)
+
+Par defaut, l'application utilise un simulateur local (localStorage).
+Pour jouer en temps reel entre plusieurs appareils (PC + telephone), configurez Supabase:
+
+1. Creer un projet Supabase.
+2. Executer le schema SQL dans `supabase/schema.sql` (SQL Editor Supabase).
+3. Copier `.env.example` vers `.env` et renseigner:
+
+```bash
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-key>
+```
+
+4. Redemarrer le serveur Vite (`npm run dev`).
+
+Quand `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` sont presents, l'app bascule automatiquement sur Supabase reel.
+
 Scripts disponibles:
 
 ```bash

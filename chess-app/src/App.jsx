@@ -117,6 +117,8 @@ function App() {
                 storageKey={`chess-app-state-multiplayer-${currentRoomData.roomId}`}
                 onGameEnd={handleGameEnd}
                 isMultiplayer
+                multiplayerRoomId={currentRoomData.roomId}
+                multiplayerPlayerColor={currentRoomData.playerColor}
               />
             </div>
           </div>
