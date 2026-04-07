@@ -12,6 +12,16 @@ class SupabaseSimulator {
     this.rooms = this._loadRooms();
   }
 
+  _refreshGames() {
+    this.games = this._loadGames();
+    return this.games;
+  }
+
+  _refreshRooms() {
+    this.rooms = this._loadRooms();
+    return this.rooms;
+  }
+
   _loadGames() {
     try {
       const stored = localStorage.getItem('chess-app-games-v1');
@@ -57,17 +67,20 @@ class SupabaseSimulator {
 
   // Récupérer toutes les parties
   getAllGames() {
+    this._refreshGames();
     return Promise.resolve({ data: this.games, error: null });
   }
 
   // Récupérer une partie par ID
   getGameById(id) {
+    this._refreshGames();
     const game = this.games.find(g => g.id === id);
     return Promise.resolve({ data: game, error: game ? null : 'Game not found' });
   }
 
   // Mettre à jour une partie
   updateGame(id, updates) {
+    this._refreshGames();
     const idx = this.games.findIndex(g => g.id === id);
     if (idx === -1) {
       return Promise.resolve({ error: 'Game not found' });
@@ -92,6 +105,7 @@ class SupabaseSimulator {
 
   // Rejoindre une room
   getRoom(roomId) {
+    this._refreshRooms();
     const normalizedRoomId = (roomId || '').trim().toUpperCase();
     const room = this.rooms.get(normalizedRoomId);
     return Promise.resolve({ data: room, error: room ? null : 'Room not found' });
@@ -99,6 +113,7 @@ class SupabaseSimulator {
 
   // Mettre à jour une room
   updateRoom(roomId, updates) {
+    this._refreshRooms();
     const normalizedRoomId = (roomId || '').trim().toUpperCase();
     const room = this.rooms.get(normalizedRoomId);
     if (!room) {
@@ -113,15 +128,32 @@ class SupabaseSimulator {
   // Listener temps réel pour une room
   onRoomChange(roomId, callback) {
     const normalizedRoomId = (roomId || '').trim().toUpperCase();
-    // Simulation simple : polling toutes les 500ms
-    const interval = setInterval(() => {
+
+    const emitLatestRoom = () => {
+      this._refreshRooms();
       const room = this.rooms.get(normalizedRoomId);
       if (room) {
         callback({ new: room });
       }
+    };
+
+    // Simulation simple : polling toutes les 500ms
+    const interval = setInterval(() => {
+      emitLatestRoom();
     }, 500);
 
-    return () => clearInterval(interval);
+    const onStorage = (event) => {
+      if (event.key === 'chess-app-rooms-v1') {
+        emitLatestRoom();
+      }
+    };
+
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', onStorage);
+    };
   }
 }
 
