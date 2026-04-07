@@ -3,15 +3,19 @@ import ChessBoard from './ChessBoard';
 import Sidebar from './Sidebar';
 import MainMenu from './MainMenu';
 import SettingsScreen from './SettingsScreen';
+import GameHistory from './GameHistory';
+import MultiplayerLobby from './MultiplayerLobby';
+import GameService from './gameService';
 import './App.css';
 
 function App() {
-  const [currentScreen, setCurrentScreen] = useState('menu'); // 'menu', 'solo', 'ai', 'settings'
+  const [currentScreen, setCurrentScreen] = useState('menu'); // 'menu', 'solo', 'ai', 'settings', 'history', 'multiplayer', 'multiplayer-game'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('chess-theme');
     return saved || 'dark';
   });
+  const [currentRoomData, setCurrentRoomData] = useState(null); // Données de la room multijoueur
 
   // Sauvegarder le thème dans localStorage
   useEffect(() => {
@@ -27,6 +31,26 @@ function App() {
     setCurrentScreen(screen);
   };
 
+  // Callback pour quand une partie multijoueur commence
+  const handleMultiplayerGameStart = (roomData) => {
+    setCurrentRoomData(roomData);
+    setCurrentScreen('multiplayer-game');
+  };
+
+  // Callback pour quand une partie se termine
+  const handleGameEnd = async (gameData) => {
+    const playerName = localStorage.getItem('chess-player-name') || 'Joueur';
+    await GameService.saveGame({
+      mode: currentScreen,
+      playerWhite: gameData.winner === 'white' ? playerName : 'Adversaire',
+      playerBlack: gameData.winner === 'black' ? playerName : 'Adversaire',
+      result: gameData.status,
+      winner: gameData.winner,
+      moves: gameData.moves,
+      reason: gameData.status,
+    });
+  };
+
   const renderScreen = () => {
     switch (currentScreen) {
       case 'menu':
@@ -37,7 +61,7 @@ function App() {
             <div className="content-wrapper">
               <div className="game-header">
                 <h1>Partie Solo</h1>
-                <p className="game-subtitle">Jouez contre un adversaire humain</p>
+                <p className="game-subtitle">Jouez tour par tour contre un adversaire humain</p>
               </div>
               <ChessBoard
                 key="solo-board"
@@ -45,6 +69,7 @@ function App() {
                 defaultAiLevel="moyen"
                 enableAIControls={false}
                 storageKey="chess-app-state-solo-v1"
+                onGameEnd={handleGameEnd}
               />
             </div>
           </div>
@@ -63,12 +88,41 @@ function App() {
                 defaultAiLevel="moyen"
                 enableAIControls
                 storageKey="chess-app-state-ai-v1"
+                onGameEnd={handleGameEnd}
               />
             </div>
           </div>
         );
       case 'settings':
         return <SettingsScreen theme={theme} toggleTheme={toggleTheme} />;
+      case 'history':
+        return <GameHistory />;
+      case 'multiplayer':
+        return <MultiplayerLobby onGameStart={handleMultiplayerGameStart} />;
+      case 'multiplayer-game':
+        return currentRoomData ? (
+          <div className="main-content game-page">
+            <div className="content-wrapper">
+              <div className="game-header">
+                <h1>👥 Multijoueur</h1>
+                <p className="game-subtitle">
+                  {currentRoomData.playerColor === 'white' ? '⚪ Vous jouez Blanc' : '⚫ Vous jouez Noir'}
+                </p>
+              </div>
+              <ChessBoard
+                key={`multiplayer-${currentRoomData.roomId}`}
+                initialHumanVsAI={false}
+                defaultAiLevel="moyen"
+                enableAIControls={false}
+                storageKey={`chess-app-state-multiplayer-${currentRoomData.roomId}`}
+                onGameEnd={handleGameEnd}
+                isMultiplayer
+              />
+            </div>
+          </div>
+        ) : (
+          <MainMenu navigateTo={navigateTo} />
+        );
       default:
         return <MainMenu navigateTo={navigateTo} />;
     }

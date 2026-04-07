@@ -29,12 +29,30 @@ function MainMenu({ navigateTo }) {
             </button>
           </div>
 
-          <div className="feature-card coming-soon">
+          <div className="feature-card">
             <div className="feature-icon">🤖</div>
             <h3>Contre IA</h3>
             <p>Affrontez l'intelligence artificielle avec differents niveaux de difficulte.</p>
-            <button className="feature-button secondary" onClick={() => navigateTo('ai')}>
+            <button className="feature-button primary" onClick={() => navigateTo('ai')}>
               Jouer contre IA
+            </button>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">👥</div>
+            <h3>Multijoueur</h3>
+            <p>Jouez contre un ami en temps reel avec un simple code de room.</p>
+            <button className="feature-button primary" onClick={() => navigateTo('multiplayer')}>
+              Multijoueur
+            </button>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">📚</div>
+            <h3>Historique</h3>
+            <p>Consultez l'historique de toutes vos parties et analysez vos progressions.</p>
+            <button className="feature-button secondary" onClick={() => navigateTo('history')}>
+              Voir l'historique
             </button>
           </div>
         </div>

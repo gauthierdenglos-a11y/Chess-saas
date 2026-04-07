@@ -287,6 +287,8 @@ const ChessBoard = ({
   defaultAiLevel = 'moyen',
   enableAIControls = true,
   storageKey = 'chess-app-state-v1',
+  onGameEnd = null, // (gameData) => void - appelé quand la partie se termine
+  onResignation = null, // (resigningPlayer) => void - appelé quand un joueur abandonne
 }) => {
   const initialState = useMemo(() => loadStoredGameState(storageKey), [storageKey]);
   const workerRef = useRef(null);
@@ -579,6 +581,27 @@ const ChessBoard = ({
     setHasMoved(getDefaultHasMoved());
     setEnPassantTarget(null);
     setPromotionPending(null);
+  };
+
+  const handleResign = () => {
+    const resigningPlayer = currentPlayer;
+    const winningPlayer = resigningPlayer === 'white' ? 'black' : 'white';
+    
+    setGameStatus('resignation');
+    setWinner(winningPlayer);
+    
+    if (onResignation) {
+      onResignation(resigningPlayer);
+    }
+    
+    if (onGameEnd) {
+      onGameEnd({
+        status: 'resignation',
+        winner: winningPlayer,
+        resignedBy: resigningPlayer,
+        moves: moveHistory,
+      });
+    }
   };
 
   const applyMoveFromUci = useCallback((uci) => {
@@ -1208,6 +1231,17 @@ const ChessBoard = ({
     window.localStorage.setItem(storageKey, JSON.stringify(payload));
   }, [board, currentPlayer, isCheck, gameStatus, winner, moveHistory, hasMoved, enPassantTarget, promotionPending, storageKey]);
 
+  // Appeler onGameEnd quand la partie se termine
+  useEffect(() => {
+    if (gameStatus && (gameStatus === 'checkmate' || gameStatus === 'stalemate' || gameStatus === 'resignation') && onGameEnd) {
+      onGameEnd({
+        status: gameStatus,
+        winner,
+        moves: moveHistory,
+      });
+    }
+  }, [gameStatus, winner, moveHistory, onGameEnd]);
+
   // Fonction appelée quand on clique sur une case
   const handleSquareClick = (row, col) => {
     if (aiThinking) {
@@ -1477,6 +1511,16 @@ const ChessBoard = ({
             title="Exporter/Importer FEN"
           >
             📋 FEN
+          </button>
+
+          <button
+            type="button"
+            className="toolbar-btn toolbar-btn-ghost"
+            onClick={handleResign}
+            disabled={gameStatus !== null}
+            title="Abandonner la partie"
+          >
+            🏳️ Abandonner
           </button>
 
           <button type="button" className="toolbar-btn toolbar-btn-primary" onClick={resetGame}>

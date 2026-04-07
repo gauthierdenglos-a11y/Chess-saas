@@ -45,6 +45,22 @@ function Sidebar({ sidebarCollapsed, setSidebarCollapsed, currentScreen, navigat
         </button>
 
         <button
+          className={`nav-item ${currentScreen === 'multiplayer' || currentScreen === 'multiplayer-game' ? 'active' : ''}`}
+          onClick={() => navigateTo('multiplayer')}
+        >
+          <span className="nav-icon">👥</span>
+          {!sidebarCollapsed && <span className="nav-text">Multijoueur</span>}
+        </button>
+
+        <button
+          className={`nav-item ${currentScreen === 'history' ? 'active' : ''}`}
+          onClick={() => navigateTo('history')}
+        >
+          <span className="nav-icon">📚</span>
+          {!sidebarCollapsed && <span className="nav-text">Historique</span>}
+        </button>
+
+        <button
           className={`nav-item ${currentScreen === 'settings' ? 'active' : ''}`}
           onClick={() => navigateTo('settings')}
         >
