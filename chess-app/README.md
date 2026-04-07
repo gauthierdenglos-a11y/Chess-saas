@@ -23,6 +23,22 @@ npm run preview  # previsualisation du build
 npm run lint     # verification ESLint
 ```
 
+## Mise en production (GitHub Pages)
+
+Le projet est configure pour un deploiement automatique via GitHub Actions.
+
+1. Pousser le code sur la branche `main`.
+2. Activer GitHub Pages dans le depot:
+	- `Settings` -> `Pages`
+	- `Source`: `GitHub Actions`
+3. Le workflow `.github/workflows/deploy-pages.yml` construit et publie automatiquement le dossier `dist`.
+
+URL de production attendue:
+
+```text
+https://<votre-user>.github.io/<nom-du-repo>/
+```
+
 ## Stack technique
 
 - React 19
