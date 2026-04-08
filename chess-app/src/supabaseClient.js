@@ -261,15 +261,33 @@ class SupabaseRemote {
   }
 }
 
+import { WebSocketMultiplayerStore } from './websocketStore';
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
+const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
 
 export const isUsingSupabaseRemote = hasSupabaseConfig;
+export const isUsingWebSocket = !hasSupabaseConfig;
 
-// Exporter le simulator pour le MVP
-export const supabase = hasSupabaseConfig
-  ? new SupabaseRemote(supabaseUrl, supabaseAnonKey)
-  : new SupabaseSimulator();
+// Stratégie : WebSocket (par défaut) → Supabase (si configuré) → localStorage (fallback)
+let supabase;
+
+if (hasSupabaseConfig) {
+  console.log('[Supabase] Using Supabase Remote');
+  supabase = new SupabaseRemote(supabaseUrl, supabaseAnonKey);
+} else {
+  console.log('[WebSocket] Attempting to use WebSocket server at', wsUrl);
+  supabase = new WebSocketMultiplayerStore(wsUrl);
+  
+  // Fallback to localStorage if WebSocket fails to connect
+  setTimeout(() => {
+    if (!supabase.isConnected) {
+      console.warn('[WebSocket] Connection failed. Falling back to localStorage.');
+      supabase = new SupabaseSimulator();
+    }
+  }, 2000);
+}
 
 export default supabase;
