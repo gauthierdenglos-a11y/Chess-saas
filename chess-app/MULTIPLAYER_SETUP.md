@@ -2,12 +2,73 @@
 
 ## 🔧 Problème Corrigé
 
-Le multijoueur n'était fonctionnel que sur le **même PC** car l'application utilisait `localStorage` (isolé par machine). Désormais, un **serveur WebSocket** synchronise les rooms en temps réel entre les machines.
+Le multijoueur n'était fonctionnel que sur le **même PC** car l'application utilisait `localStorage` (isolé par machine). Désormais, un **serveur WebSocket** synchronise les rooms en temps réel entre les machines, avec **fallback automatique** à localStorage.
 
-## 📋 Prérequis
+## 🚀 Déploiement Production
 
-- Node.js 16+ installé
-- NPM ou Yarn
+### Comportement en production
+
+**Par défaut**, en production :
+- ✅ L'app tente de se connecter à un serveur WebSocket **sur le même domaine** (wss://{votredomaine.com})
+- ⚠️ Si aucun serveur n'est trouvé, elle **bascule silencieusement à localStorage**
+- ℹ️ L'utilisateur verra un avertissement "Mode local" si le serveur n'est pas accessible
+- 💾 En mode local (localStorage), le multijoueur ne fonctionne que **sur le même PC**
+
+### Options de configuration
+
+#### Option 1 : Sans serveur WebSocket (Mode local uniquement)
+Laissez l'app déployée sans serveur WebSocket. Elle basculera automatiquement à localStorage.
+
+**Avantages :** Aucune infrastructure requise
+**Inconvénients :** Multijoueur jeu local uniquement (même PC)
+
+#### Option 2 : Déployer le serveur WebSocket
+
+Déployez `server.js` sur un serveur Node.js (Heroku, Railway, DigitalOcean, etc.) sur le **même domaine** que l'app.
+
+**Configuration requise :**
+```bash
+# Sur le serveur Node.js
+npm install
+npm run start:server
+
+# Pour une app sur https://chess.example.com
+# Le serveur WebSocket doit être accessible sur wss://chess.example.com:8080
+# (avec proxy HTTP inversé / HTTPS)
+```
+
+Configure un **proxy HTTP inversé** (Nginx, Cloudflare, etc.):
+```nginx
+# Exemple Nginx
+location /ws {
+  proxy_pass http://localhost:8080;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+}
+```
+
+Variables d'environnement (`.env.production`) :**
+```
+VITE_WS_URL=wss://chess.example.com
+```
+
+#### Option 3 : Utiliser Supabase (Recommandé)
+
+Pour une solution production robuste, utilisez Supabase avec persistance en base de données.
+
+**Setup :**
+1. Créer un compte [Supabase](https://supabase.com)
+2. Créer une table `rooms` et `games`
+3. Configurer `.env.production`:
+```
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+L'app utilisera Supabase prioritairement, zéro infrastructure WebSocket requise.
+
+## 📋 Prérequis (Développement Local)
 
 ## 🚀 Installation & Démarrage
 

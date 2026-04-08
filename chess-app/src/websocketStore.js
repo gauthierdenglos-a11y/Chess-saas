@@ -4,9 +4,27 @@
  * Compatible avec l'API de SupabaseSimulator/SupabaseRemote
  */
 
+// Construire l'URL WebSocket dynamiquement
+function getWebSocketUrl(configUrl) {
+  // Si URL explicite fournie, l'utiliser
+  if (configUrl && configUrl !== 'ws://localhost:8080') {
+    return configUrl;
+  }
+
+  // En développement local, utiliser localhost:8080
+  if (import.meta.env.DEV) {
+    return 'ws://localhost:8080';
+  }
+
+  // En production, construire l'URL à partir du host courant
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = window.location.host; // includes hostname + port if non-standard
+  return `${protocol}//${host}`;
+}
+
 export class WebSocketMultiplayerStore {
-  constructor(wsUrl = 'ws://localhost:8080') {
-    this.wsUrl = wsUrl;
+  constructor(configUrl = null) {
+    this.wsUrl = getWebSocketUrl(configUrl);
     this.ws = null;
     this.messageHandlers = new Map();
     this.subscriptions = new Map();
@@ -16,6 +34,7 @@ export class WebSocketMultiplayerStore {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 1000;
+    this.failedPermanently = false;
 
     this.connect();
   }
@@ -40,7 +59,9 @@ export class WebSocketMultiplayerStore {
       };
 
       this.ws.onerror = (event) => {
-        console.error('[WebSocket] Error:', event);
+        if (import.meta.env.DEV) {
+          console.error('[WebSocket] Error:', event);
+        }
       };
 
       this.ws.onclose = () => {
@@ -56,15 +77,21 @@ export class WebSocketMultiplayerStore {
 
   reconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error(
-        '[WebSocket] Max reconnection attempts reached. Please check if the server is running.'
-      );
+      this.failedPermanently = true;
+      if (import.meta.env.DEV) {
+        console.warn(
+          '[WebSocket] Max reconnection attempts reached. Using localStorage fallback.'
+        );
+      }
       return;
     }
 
     this.reconnectAttempts += 1;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-    console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    
+    if (import.meta.env.DEV) {
+      console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    }
 
     setTimeout(() => {
       this.connect();
@@ -90,7 +117,7 @@ export class WebSocketMultiplayerStore {
 
   send(message) {
     return new Promise((resolve) => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.failedPermanently) {
         resolve({ error: 'WebSocket not connected' });
         return;
       }
@@ -122,12 +149,12 @@ export class WebSocketMultiplayerStore {
     return Promise.resolve({ data: [], error: null });
   }
 
-  async getGameById(id) {
+  async getGameById() {
     // Not implemented for WebSocket version
     return Promise.resolve({ data: null, error: 'Not implemented' });
   }
 
-  async updateGame(id, updates) {
+  async updateGame() {
     // Not implemented for WebSocket version
     return Promise.resolve({ data: null, error: 'Not implemented' });
   }

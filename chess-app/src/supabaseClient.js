@@ -266,28 +266,71 @@ import { WebSocketMultiplayerStore } from './websocketStore';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
-const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
+const wsUrl = import.meta.env.VITE_WS_URL || null; // null = auto-detect
 
 export const isUsingSupabaseRemote = hasSupabaseConfig;
 export const isUsingWebSocket = !hasSupabaseConfig;
 
-// Stratégie : WebSocket (par défaut) → Supabase (si configuré) → localStorage (fallback)
+// Stratégie : Supabase → WebSocket → localStorage (fallback)
 let supabase;
 
 if (hasSupabaseConfig) {
-  console.log('[Supabase] Using Supabase Remote');
+  if (import.meta.env.DEV) {
+    console.log('[Supabase] Using Supabase Remote');
+  }
   supabase = new SupabaseRemote(supabaseUrl, supabaseAnonKey);
 } else {
-  console.log('[WebSocket] Attempting to use WebSocket server at', wsUrl);
-  supabase = new WebSocketMultiplayerStore(wsUrl);
-  
-  // Fallback to localStorage if WebSocket fails to connect
+  // Créer un wrapper qui bascule de WebSocket à localStorage silencieusement
+  supabase = createAdaptiveStore(wsUrl);
+}
+
+/**
+ * Crée un store qui se connecte à WebSocket mais bascule à localStorage si ça échoue
+ * Le basculement est silencieux en production (pas d'erreur affichée à l'utilisateur)
+ */
+function createAdaptiveStore(wsUrl) {
+  const wsStore = new WebSocketMultiplayerStore(wsUrl);
+  const localStore = new SupabaseSimulator();
+
+  // Wrapper qui bascule automatiquement to localStorage après timeout
+  const wrapper = new Proxy(wsStore, {
+    get(target, prop) {
+      // Si WebSocket échoue de façon permanente, basculer à localStorage
+      if (target.failedPermanently && typeof target[prop] === 'function') {
+        return (...args) => localStore[prop](...args);
+      }
+      
+      // Si WebSocket connecté, utiliser WebSocket
+      if (target.isConnected || !target.failedPermanently) {
+        return target[prop];
+      }
+
+      // Sinon, utiliser localStorage
+      if (typeof target[prop] === 'function') {
+        return (...args) => localStore[prop](...args);
+      }
+      return target[prop];
+    },
+  });
+
+  // Vérifier après 3 secondes si WebSocket est connecté
   setTimeout(() => {
-    if (!supabase.isConnected) {
-      console.warn('[WebSocket] Connection failed. Falling back to localStorage.');
-      supabase = new SupabaseSimulator();
+    if (!wsStore.isConnected && !wsStore.failedPermanently) {
+      // Pas encore connecté et pas échec permanent, attendre un peu plus
+      setTimeout(() => {
+        if (!wsStore.isConnected && !wsStore.failedPermanently) {
+          wsStore.failedPermanently = true;
+          if (import.meta.env.DEV) {
+            console.warn(
+              '[Multiplayer] WebSocket unavailable. Switching to localStorage (local multiplayer only).'
+            );
+          }
+        }
+      }, 2000);
     }
-  }, 2000);
+  }, 3000);
+
+  return wrapper;
 }
 
 export default supabase;

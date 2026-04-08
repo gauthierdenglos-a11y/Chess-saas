@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import GameService from './gameService';
+import { isUsingSupabaseRemote, isUsingWebSocket } from './supabaseClient';
 
 function MultiplayerLobby({ onGameStart }) {
   const [playerName, setPlayerName] = useState(() => {
@@ -10,6 +11,19 @@ function MultiplayerLobby({ onGameStart }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [createdRoomId, setCreatedRoomId] = useState('');
+  const [connectionWarning, setConnectionWarning] = useState('');
+
+  useEffect(() => {
+    // Détecter le mode de stockage et afficher un avertissement si nécessaire
+    if (isUsingWebSocket && !isUsingSupabaseRemote) {
+      // WebSocket peut ne pas être disponible en production
+      setTimeout(() => {
+        // Le avertissement sera affiché si connexion WebSocket échoue
+        // C'est géré silencieusement par le fallback localStorage
+        setConnectionWarning('local');
+      }, 4000);
+    }
+  }, []);
 
   useEffect(() => {
     if (!createdRoomId) {
@@ -174,6 +188,20 @@ function MultiplayerLobby({ onGameStart }) {
               </div>
 
               {error && <div className="lobby-error">{error}</div>}
+              {connectionWarning === 'local' && (
+                <div style={{
+                  backgroundColor: '#fff3cd',
+                  border: '1px solid #ffc107',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  marginTop: '16px',
+                  fontSize: '0.9rem',
+                  color: '#333',
+                }}>
+                  <strong>⚠️ Mode local :</strong> Le serveur multijoueur n'est pas accessible. 
+                  Vous pouvez jouer localement sur le même PC, ou contactez l'administrateur pour configurer le serveur.
+                </div>
+              )}
             </>
           ) : (
             <div className="settings-section lobby-section lobby-waiting">

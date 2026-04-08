@@ -5,7 +5,6 @@
 
 import WebSocket, { WebSocketServer } from 'ws';
 import http from 'http';
-import url from 'url';
 
 const PORT = process.env.WS_PORT || 8080;
 
