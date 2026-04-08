@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import GameService from './gameService';
-import { getMultiplayerConnectionStatus, isUsingWebSocket } from './supabaseClient';
+import { getMultiplayerConnectionStatus } from './supabaseClient';
 
 function MultiplayerLobby({ onGameStart }) {
   const [playerName, setPlayerName] = useState(() => {
@@ -12,20 +12,17 @@ function MultiplayerLobby({ onGameStart }) {
   const [error, setError] = useState('');
   const [createdRoomId, setCreatedRoomId] = useState('');
   const [connectionWarning, setConnectionWarning] = useState('');
+  const [connectionMode, setConnectionMode] = useState('unknown');
 
   useEffect(() => {
-    if (!isUsingWebSocket) {
-      setConnectionWarning('');
-      return undefined;
-    }
-
-    const updateConnectionWarning = () => {
+    const updateConnectionStatus = () => {
       const status = getMultiplayerConnectionStatus();
-      setConnectionWarning(status.isFallbackLocal ? 'local' : '');
+      setConnectionMode(status.mode || 'unknown');
+      setConnectionWarning(status.mode === 'localStorage' || status.isFallbackLocal ? 'local' : '');
     };
 
-    updateConnectionWarning();
-    const interval = setInterval(updateConnectionWarning, 1000);
+    updateConnectionStatus();
+    const interval = setInterval(updateConnectionStatus, 1000);
 
     return () => clearInterval(interval);
   }, []);
@@ -205,6 +202,19 @@ function MultiplayerLobby({ onGameStart }) {
                 }}>
                   <strong>⚠️ Mode local :</strong> Le serveur multijoueur n'est pas accessible. 
                   Vous pouvez jouer localement sur le même PC, ou contactez l'administrateur pour configurer le serveur.
+                </div>
+              )}
+              {connectionMode === 'supabase' && (
+                <div style={{
+                  backgroundColor: '#d4edda',
+                  border: '1px solid #28a745',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  marginTop: '16px',
+                  fontSize: '0.9rem',
+                  color: '#1b4332',
+                }}>
+                  <strong>✅ Mode Supabase :</strong> Multijoueur en ligne actif (plusieurs PC/appareils).
                 </div>
               )}
             </>

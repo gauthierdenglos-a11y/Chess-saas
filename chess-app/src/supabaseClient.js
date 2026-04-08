@@ -267,9 +267,14 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 const wsUrl = import.meta.env.VITE_WS_URL || null; // null = auto-detect
+const isGitHubPagesHost =
+  typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
+const hasExplicitWebSocketConfig = Boolean(wsUrl);
+const shouldPreferLocalStorage =
+  !hasSupabaseConfig && isGitHubPagesHost && !hasExplicitWebSocketConfig;
 
 export const isUsingSupabaseRemote = hasSupabaseConfig;
-export const isUsingWebSocket = !hasSupabaseConfig;
+export const isUsingWebSocket = !hasSupabaseConfig && !shouldPreferLocalStorage;
 
 // Stratégie : Supabase → WebSocket → localStorage (fallback)
 let supabase;
@@ -294,6 +299,15 @@ export function getMultiplayerConnectionStatus() {
     };
   }
 
+  if (shouldPreferLocalStorage) {
+    return {
+      mode: 'localStorage',
+      isConnected: true,
+      isFallbackLocal: true,
+      reconnectAttempts: 0,
+    };
+  }
+
   return {
     mode: 'websocket',
     isConnected: Boolean(supabase?.isConnected),
@@ -310,22 +324,54 @@ function createAdaptiveStore(wsUrl) {
   const wsStore = new WebSocketMultiplayerStore(wsUrl);
   const localStore = new SupabaseSimulator();
 
+  const multiplayerMethods = new Set(['createRoom', 'getRoom', 'updateRoom', 'onRoomChange']);
+
+  const callWithFallback = async (methodName, args) => {
+    const wsMethod = wsStore[methodName];
+    const localMethod = localStore[methodName];
+
+    if (typeof wsMethod !== 'function' || typeof localMethod !== 'function') {
+      return wsMethod?.(...args);
+    }
+
+    // GitHub Pages cannot host a persistent WebSocket backend.
+    if (shouldPreferLocalStorage) {
+      return localMethod(...args);
+    }
+
+    try {
+      const result = await wsMethod.apply(wsStore, args);
+
+      // If WS call returns a transport error object, fallback immediately.
+      if (result && typeof result === 'object' && result.error === 'WebSocket not connected') {
+        return localMethod(...args);
+      }
+
+      return result;
+    } catch (error) {
+      const message = error?.message || '';
+      if (message.includes('WebSocket not connected')) {
+        return localMethod(...args);
+      }
+      throw error;
+    }
+  };
+
   // Wrapper qui bascule automatiquement to localStorage après timeout
   const wrapper = new Proxy(wsStore, {
     get(target, prop) {
+      if (typeof prop === 'string' && multiplayerMethods.has(prop)) {
+        return (...args) => callWithFallback(prop, args);
+      }
+
       // Si WebSocket échoue de façon permanente, basculer à localStorage
       if (target.failedPermanently && typeof target[prop] === 'function') {
         return (...args) => localStore[prop](...args);
       }
-      
-      // Si WebSocket connecté, utiliser WebSocket
-      if (target.isConnected || !target.failedPermanently) {
-        return target[prop];
-      }
 
-      // Sinon, utiliser localStorage
+      // Pour les autres méthodes (jeux, status, etc.), conserver le comportement natif du store WS.
       if (typeof target[prop] === 'function') {
-        return (...args) => localStore[prop](...args);
+        return target[prop].bind(target);
       }
       return target[prop];
     },
