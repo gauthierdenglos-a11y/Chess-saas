@@ -331,12 +331,15 @@ function createAdaptiveStore(wsUrl) {
     const localMethod = localStore[methodName];
 
     if (typeof wsMethod !== 'function' || typeof localMethod !== 'function') {
-      return wsMethod?.(...args);
+      if (typeof wsMethod === 'function') {
+        return wsMethod.apply(wsStore, args);
+      }
+      return undefined;
     }
 
     // GitHub Pages cannot host a persistent WebSocket backend.
     if (shouldPreferLocalStorage) {
-      return localMethod(...args);
+      return localMethod.apply(localStore, args);
     }
 
     try {
@@ -344,14 +347,14 @@ function createAdaptiveStore(wsUrl) {
 
       // If WS call returns a transport error object, fallback immediately.
       if (result && typeof result === 'object' && result.error === 'WebSocket not connected') {
-        return localMethod(...args);
+        return localMethod.apply(localStore, args);
       }
 
       return result;
     } catch (error) {
       const message = error?.message || '';
       if (message.includes('WebSocket not connected')) {
-        return localMethod(...args);
+        return localMethod.apply(localStore, args);
       }
       throw error;
     }
