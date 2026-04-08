@@ -7,17 +7,20 @@
 // Construire l'URL WebSocket dynamiquement
 function getWebSocketUrl(configUrl) {
   // Si URL explicite fournie, l'utiliser
-  if (configUrl && configUrl !== 'ws://localhost:8080') {
+  if (configUrl) {
     return configUrl;
   }
 
-  // En développement local, utiliser localhost:8080
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const hostname = window.location.hostname || 'localhost';
+  const wsPort = import.meta.env.VITE_WS_PORT || '8080';
+
+  // En dev, utiliser l'hote courant pour supporter un 2e PC sur le reseau local.
   if (import.meta.env.DEV) {
-    return 'ws://localhost:8080';
+    return `${protocol}//${hostname}:${wsPort}`;
   }
 
   // En production, construire l'URL à partir du host courant
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host; // includes hostname + port if non-standard
   return `${protocol}//${host}`;
 }

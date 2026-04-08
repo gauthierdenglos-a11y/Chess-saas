@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import GameService from './gameService';
-import { isUsingSupabaseRemote, isUsingWebSocket } from './supabaseClient';
+import { getMultiplayerConnectionStatus, isUsingWebSocket } from './supabaseClient';
 
 function MultiplayerLobby({ onGameStart }) {
   const [playerName, setPlayerName] = useState(() => {
@@ -14,15 +14,20 @@ function MultiplayerLobby({ onGameStart }) {
   const [connectionWarning, setConnectionWarning] = useState('');
 
   useEffect(() => {
-    // Détecter le mode de stockage et afficher un avertissement si nécessaire
-    if (isUsingWebSocket && !isUsingSupabaseRemote) {
-      // WebSocket peut ne pas être disponible en production
-      setTimeout(() => {
-        // Le avertissement sera affiché si connexion WebSocket échoue
-        // C'est géré silencieusement par le fallback localStorage
-        setConnectionWarning('local');
-      }, 4000);
+    if (!isUsingWebSocket) {
+      setConnectionWarning('');
+      return undefined;
     }
+
+    const updateConnectionWarning = () => {
+      const status = getMultiplayerConnectionStatus();
+      setConnectionWarning(status.isFallbackLocal ? 'local' : '');
+    };
+
+    updateConnectionWarning();
+    const interval = setInterval(updateConnectionWarning, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

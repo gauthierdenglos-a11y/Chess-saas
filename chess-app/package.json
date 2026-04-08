@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0",
     "start:server": "node server.js",
     "start": "concurrently \"npm run start:server\" \"npm run dev\"",
     "build": "vite build",

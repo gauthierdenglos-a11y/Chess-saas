@@ -284,6 +284,24 @@ if (hasSupabaseConfig) {
   supabase = createAdaptiveStore(wsUrl);
 }
 
+export function getMultiplayerConnectionStatus() {
+  if (hasSupabaseConfig) {
+    return {
+      mode: 'supabase',
+      isConnected: true,
+      isFallbackLocal: false,
+      reconnectAttempts: 0,
+    };
+  }
+
+  return {
+    mode: 'websocket',
+    isConnected: Boolean(supabase?.isConnected),
+    isFallbackLocal: Boolean(supabase?.failedPermanently),
+    reconnectAttempts: Number(supabase?.reconnectAttempts || 0),
+  };
+}
+
 /**
  * Crée un store qui se connecte à WebSocket mais bascule à localStorage si ça échoue
  * Le basculement est silencieux en production (pas d'erreur affichée à l'utilisateur)
