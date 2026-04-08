@@ -357,6 +357,8 @@ export function getMultiplayerDiagnostics() {
 if (typeof window !== 'undefined') {
   // Browser console helper: window.__CHESS_MULTIPLAYER_DIAG__()
   window.__CHESS_MULTIPLAYER_DIAG__ = getMultiplayerDiagnostics;
+  // Backward-compatible alias for easier manual debugging.
+  window.CHESS_MULTIPLAYER_DIAG = getMultiplayerDiagnostics;
 }
 
 /**
