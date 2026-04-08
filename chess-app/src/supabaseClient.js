@@ -10,6 +10,12 @@ class SupabaseSimulator {
   constructor() {
     this.games = this._loadGames();
     this.rooms = this._loadRooms();
+
+    // Guarantee instance context even if methods are passed around.
+    this.createRoom = this.createRoom.bind(this);
+    this.getRoom = this.getRoom.bind(this);
+    this.updateRoom = this.updateRoom.bind(this);
+    this.onRoomChange = this.onRoomChange.bind(this);
   }
 
   _refreshGames() {
@@ -316,6 +322,43 @@ export function getMultiplayerConnectionStatus() {
   };
 }
 
+export function getMultiplayerDiagnostics() {
+  const selectedMode = hasSupabaseConfig
+    ? 'supabase'
+    : shouldPreferLocalStorage
+      ? 'localStorage'
+      : 'websocket';
+
+  return {
+    selectedMode,
+    hasSupabaseConfig,
+    hasExplicitWebSocketConfig,
+    shouldPreferLocalStorage,
+    isGitHubPagesHost,
+    host:
+      typeof window !== 'undefined'
+        ? {
+            hostname: window.location.hostname,
+            host: window.location.host,
+            protocol: window.location.protocol,
+          }
+        : null,
+    websocketState:
+      selectedMode === 'websocket'
+        ? {
+            isConnected: Boolean(supabase?.isConnected),
+            failedPermanently: Boolean(supabase?.failedPermanently),
+            reconnectAttempts: Number(supabase?.reconnectAttempts || 0),
+          }
+        : null,
+  };
+}
+
+if (typeof window !== 'undefined') {
+  // Browser console helper: window.__CHESS_MULTIPLAYER_DIAG__()
+  window.__CHESS_MULTIPLAYER_DIAG__ = getMultiplayerDiagnostics;
+}
+
 /**
  * Crée un store qui se connecte à WebSocket mais bascule à localStorage si ça échoue
  * Le basculement est silencieux en production (pas d'erreur affichée à l'utilisateur)
@@ -324,9 +367,10 @@ function createAdaptiveStore(wsUrl) {
   const wsStore = new WebSocketMultiplayerStore(wsUrl);
   const localStore = new SupabaseSimulator();
 
-  const multiplayerMethods = new Set(['createRoom', 'getRoom', 'updateRoom', 'onRoomChange']);
+  const asyncMultiplayerMethods = new Set(['createRoom', 'getRoom', 'updateRoom']);
+  const syncMultiplayerMethods = new Set(['onRoomChange']);
 
-  const callWithFallback = async (methodName, args) => {
+  const callAsyncWithFallback = async (methodName, args) => {
     const wsMethod = wsStore[methodName];
     const localMethod = localStore[methodName];
 
@@ -360,11 +404,34 @@ function createAdaptiveStore(wsUrl) {
     }
   };
 
+  const callSyncWithFallback = (methodName, args) => {
+    const wsMethod = wsStore[methodName];
+    const localMethod = localStore[methodName];
+
+    if (typeof wsMethod !== 'function' || typeof localMethod !== 'function') {
+      if (typeof wsMethod === 'function') {
+        return wsMethod.apply(wsStore, args);
+      }
+      return undefined;
+    }
+
+    // Keep realtime subscription API synchronous for React cleanup handlers.
+    if (shouldPreferLocalStorage || wsStore.failedPermanently || !wsStore.isConnected) {
+      return localMethod.apply(localStore, args);
+    }
+
+    return wsMethod.apply(wsStore, args);
+  };
+
   // Wrapper qui bascule automatiquement to localStorage après timeout
   const wrapper = new Proxy(wsStore, {
     get(target, prop) {
-      if (typeof prop === 'string' && multiplayerMethods.has(prop)) {
-        return (...args) => callWithFallback(prop, args);
+      if (typeof prop === 'string' && asyncMultiplayerMethods.has(prop)) {
+        return (...args) => callAsyncWithFallback(prop, args);
+      }
+
+      if (typeof prop === 'string' && syncMultiplayerMethods.has(prop)) {
+        return (...args) => callSyncWithFallback(prop, args);
       }
 
       // Si WebSocket échoue de façon permanente, basculer à localStorage

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import GameService from './gameService';
-import { getMultiplayerConnectionStatus } from './supabaseClient';
+import { getMultiplayerConnectionStatus, getMultiplayerDiagnostics } from './supabaseClient';
 
 function MultiplayerLobby({ onGameStart }) {
   const [playerName, setPlayerName] = useState(() => {
@@ -15,6 +15,13 @@ function MultiplayerLobby({ onGameStart }) {
   const [connectionMode, setConnectionMode] = useState('unknown');
 
   useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const debugEnabled = import.meta.env.DEV || searchParams.get('debugMp') === '1';
+
+    if (debugEnabled) {
+      console.info('[Multiplayer] Diagnostics', getMultiplayerDiagnostics());
+    }
+
     const updateConnectionStatus = () => {
       const status = getMultiplayerConnectionStatus();
       setConnectionMode(status.mode || 'unknown');
