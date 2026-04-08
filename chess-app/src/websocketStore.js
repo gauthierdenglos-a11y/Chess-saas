@@ -9,6 +9,12 @@ function getWebSocketUrl(configUrl) {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const currentHost = window.location.host;
   const currentHostname = window.location.hostname;
+  
+  // En production, privilégier la variable d'environnement VITE_WS_URL si disponible
+  if (import.meta.env.VITE_WS_URL && !import.meta.env.DEV) {
+    return import.meta.env.VITE_WS_URL;
+  }
+  
   const wsPort = import.meta.env.VITE_WS_PORT || '8080';
 
   // Si URL explicite fournie, l'utiliser (en corrigeant localhost sur les clients distants).

@@ -283,12 +283,17 @@ function broadcastToRoom(roomId, message) {
   }
 }
 
-server.listen(PORT, () => {
+// S'assurer que le serveur écoute sur tous les interfaces (0.0.0.0) pour la production
+// Si port est 8080 en dev, écouter sur localhost; sinon (prod), écouter sur 0.0.0.0
+const hostname = PORT === 8080 ? 'localhost' : '0.0.0.0';
+
+server.listen(PORT, hostname, () => {
   console.log(`
 ╔══════════════════════════════════════════════╗
 ║  Chess App WebSocket Server Started          ║
 ║  Port: ${PORT}                                  ║
-║  URL: ws://localhost:${PORT}                     ║
+║  Hostname: ${hostname}                         ║
+║  URL: ws://0.0.0.0:${PORT}                      ║
 ╚══════════════════════════════════════════════╝
   `);
 });
