@@ -35,12 +35,8 @@ function getWebSocketUrl(configUrl) {
     return `${protocol}//${currentHost}/ws`;
   }
 
-  // En production, essayer d'abord le meme host puis un port WS dedie si configure.
-  if (import.meta.env.VITE_WS_PORT) {
-    return `${protocol}//${currentHostname}:${wsPort}`;
-  }
-
-  return `${protocol}//${currentHost}`;
+  // Hors dev, utiliser explicitement le port WS (8080 par defaut).
+  return `${protocol}//${currentHostname}:${wsPort}`;
 }
 
 export class WebSocketMultiplayerStore {
@@ -121,11 +117,12 @@ export class WebSocketMultiplayerStore {
   }
 
   handleMessage(data) {
-    const { type, messageId, roomId } = data;
+    const { type, messageId } = data;
+    const resolvedRoomId = (data.roomId || data.room?.id || '').trim().toUpperCase();
 
     // Handle room subscription updates
-    if (type === 'room_updated' && roomId && this.subscriptions.has(roomId)) {
-      const callbacks = this.subscriptions.get(roomId);
+    if (type === 'room_updated' && resolvedRoomId && this.subscriptions.has(resolvedRoomId)) {
+      const callbacks = this.subscriptions.get(resolvedRoomId);
       callbacks.forEach((callback) => callback(data));
     }
 

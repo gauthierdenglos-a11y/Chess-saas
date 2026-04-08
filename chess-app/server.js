@@ -59,33 +59,33 @@ wss.on('connection', (ws) => {
 });
 
 function handleMessage(clientId, ws, data) {
-  const { type, payload } = data;
+  const { type, payload, messageId } = data;
 
   switch (type) {
     case 'create_room':
-      createRoom(clientId, ws, payload);
+      createRoom(clientId, ws, payload, messageId);
       break;
     case 'join_room':
-      joinRoom(clientId, ws, payload);
+      joinRoom(clientId, ws, payload, messageId);
       break;
     case 'update_room':
-      updateRoom(clientId, ws, payload);
+      updateRoom(clientId, ws, payload, messageId);
       break;
     case 'get_room':
-      getRoom(clientId, ws, payload);
+      getRoom(clientId, ws, payload, messageId);
       break;
     case 'subscribe_room':
-      subscribeRoom(clientId, ws, payload);
+      subscribeRoom(clientId, ws, payload, messageId);
       break;
     case 'unsubscribe_room':
-      unsubscribeRoom(clientId, ws, payload);
+      unsubscribeRoom(clientId, ws, payload, messageId);
       break;
     default:
-      ws.send(JSON.stringify({ type: 'error', message: `Unknown type: ${type}` }));
+      ws.send(JSON.stringify({ type: 'error', message: `Unknown type: ${type}`, messageId }));
   }
 }
 
-function createRoom(clientId, ws, payload) {
+function createRoom(clientId, ws, payload, messageId) {
   const { id, playerWhite, status } = payload;
   const roomId = id.toUpperCase();
 
@@ -93,6 +93,7 @@ function createRoom(clientId, ws, payload) {
     ws.send(JSON.stringify({
       type: 'error',
       message: 'Room already exists',
+      messageId,
     }));
     return;
   }
@@ -118,10 +119,11 @@ function createRoom(clientId, ws, payload) {
     type: 'room_created',
     roomId,
     room,
+    messageId,
   }));
 }
 
-function joinRoom(clientId, ws, payload) {
+function joinRoom(clientId, ws, payload, messageId) {
   const { roomId, playerName } = payload;
   const normalizedRoomId = roomId.trim().toUpperCase();
 
@@ -130,6 +132,7 @@ function joinRoom(clientId, ws, payload) {
     ws.send(JSON.stringify({
       type: 'error',
       message: 'Room not found',
+      messageId,
     }));
     return;
   }
@@ -138,6 +141,7 @@ function joinRoom(clientId, ws, payload) {
     ws.send(JSON.stringify({
       type: 'error',
       message: 'Room is not available',
+      messageId,
     }));
     return;
   }
@@ -152,6 +156,7 @@ function joinRoom(clientId, ws, payload) {
   // Notifier tous les clients abonnés à cette room
   broadcastToRoom(normalizedRoomId, {
     type: 'room_updated',
+    roomId: normalizedRoomId,
     room,
   });
 
@@ -159,10 +164,11 @@ function joinRoom(clientId, ws, payload) {
     type: 'room_joined',
     roomId: normalizedRoomId,
     room,
+    messageId,
   }));
 }
 
-function updateRoom(clientId, ws, payload) {
+function updateRoom(clientId, ws, payload, messageId) {
   const { roomId, updates } = payload;
   const normalizedRoomId = roomId.trim().toUpperCase();
 
@@ -171,6 +177,7 @@ function updateRoom(clientId, ws, payload) {
     ws.send(JSON.stringify({
       type: 'error',
       message: 'Room not found',
+      messageId,
     }));
     return;
   }
@@ -181,11 +188,19 @@ function updateRoom(clientId, ws, payload) {
   // Notifier tous les clients abonnés
   broadcastToRoom(normalizedRoomId, {
     type: 'room_updated',
+    roomId: normalizedRoomId,
     room,
   });
+
+  ws.send(JSON.stringify({
+    type: 'room_updated_ack',
+    roomId: normalizedRoomId,
+    room,
+    messageId,
+  }));
 }
 
-function getRoom(clientId, ws, payload) {
+function getRoom(clientId, ws, payload, messageId) {
   const { roomId } = payload;
   const normalizedRoomId = roomId.trim().toUpperCase();
 
@@ -194,6 +209,7 @@ function getRoom(clientId, ws, payload) {
     ws.send(JSON.stringify({
       type: 'error',
       message: 'Room not found',
+      messageId,
     }));
     return;
   }
@@ -201,10 +217,12 @@ function getRoom(clientId, ws, payload) {
   ws.send(JSON.stringify({
     type: 'room_data',
     room,
+    roomId: normalizedRoomId,
+    messageId,
   }));
 }
 
-function subscribeRoom(clientId, ws, payload) {
+function subscribeRoom(clientId, ws, payload, messageId) {
   const { roomId } = payload;
   const normalizedRoomId = roomId.trim().toUpperCase();
 
@@ -213,6 +231,7 @@ function subscribeRoom(clientId, ws, payload) {
     ws.send(JSON.stringify({
       type: 'error',
       message: 'Room not found',
+      messageId,
     }));
     return;
   }
@@ -223,10 +242,11 @@ function subscribeRoom(clientId, ws, payload) {
   ws.send(JSON.stringify({
     type: 'subscribed',
     roomId: normalizedRoomId,
+    messageId,
   }));
 }
 
-function unsubscribeRoom(clientId, ws, payload) {
+function unsubscribeRoom(clientId, ws, payload, messageId) {
   const { roomId } = payload;
   const normalizedRoomId = roomId.trim().toUpperCase();
 
@@ -242,6 +262,12 @@ function unsubscribeRoom(clientId, ws, payload) {
     rooms.delete(normalizedRoomId);
     console.log(`[Room] Deleted empty room ${normalizedRoomId}`);
   }
+
+  ws.send(JSON.stringify({
+    type: 'unsubscribed',
+    roomId: normalizedRoomId,
+    messageId,
+  }));
 }
 
 function broadcastToRoom(roomId, message) {
