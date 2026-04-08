@@ -6,23 +6,41 @@
 
 // Construire l'URL WebSocket dynamiquement
 function getWebSocketUrl(configUrl) {
-  // Si URL explicite fournie, l'utiliser
-  if (configUrl) {
-    return configUrl;
-  }
-
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const hostname = window.location.hostname || 'localhost';
+  const currentHost = window.location.host;
+  const currentHostname = window.location.hostname;
   const wsPort = import.meta.env.VITE_WS_PORT || '8080';
 
-  // En dev, utiliser l'hote courant pour supporter un 2e PC sur le reseau local.
-  if (import.meta.env.DEV) {
-    return `${protocol}//${hostname}:${wsPort}`;
+  // Si URL explicite fournie, l'utiliser (en corrigeant localhost sur les clients distants).
+  if (configUrl) {
+    try {
+      const parsed = new URL(configUrl);
+      const isConfiguredAsLocalhost = ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
+      const isCurrentHostLocal = ['localhost', '127.0.0.1', '::1'].includes(currentHostname);
+
+      if (isConfiguredAsLocalhost && !isCurrentHostLocal) {
+        parsed.hostname = currentHostname;
+        return parsed.toString();
+      }
+
+      return configUrl;
+    } catch {
+      return configUrl;
+    }
   }
 
-  // En production, construire l'URL à partir du host courant
-  const host = window.location.host; // includes hostname + port if non-standard
-  return `${protocol}//${host}`;
+  // En dev, utiliser l'hote courant pour supporter un 2e PC sur le reseau local.
+  // On passe par le proxy Vite /ws pour eviter d'exposer le port 8080 aux clients.
+  if (import.meta.env.DEV) {
+    return `${protocol}//${currentHost}/ws`;
+  }
+
+  // En production, essayer d'abord le meme host puis un port WS dedie si configure.
+  if (import.meta.env.VITE_WS_PORT) {
+    return `${protocol}//${currentHostname}:${wsPort}`;
+  }
+
+  return `${protocol}//${currentHost}`;
 }
 
 export class WebSocketMultiplayerStore {
@@ -49,6 +67,7 @@ export class WebSocketMultiplayerStore {
       this.ws.onopen = () => {
         console.log('[WebSocket] Connected to server');
         this.isConnected = true;
+        this.failedPermanently = false;
         this.reconnectAttempts = 0;
       };
 

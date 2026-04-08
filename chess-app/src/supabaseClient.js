@@ -331,23 +331,6 @@ function createAdaptiveStore(wsUrl) {
     },
   });
 
-  // Vérifier après 3 secondes si WebSocket est connecté
-  setTimeout(() => {
-    if (!wsStore.isConnected && !wsStore.failedPermanently) {
-      // Pas encore connecté et pas échec permanent, attendre un peu plus
-      setTimeout(() => {
-        if (!wsStore.isConnected && !wsStore.failedPermanently) {
-          wsStore.failedPermanently = true;
-          if (import.meta.env.DEV) {
-            console.warn(
-              '[Multiplayer] WebSocket unavailable. Switching to localStorage (local multiplayer only).'
-            );
-          }
-        }
-      }, 2000);
-    }
-  }, 3000);
-
   return wrapper;
 }
 
