@@ -86,7 +86,6 @@ class GameService {
       moves: [],
       currentPlayer: 'white',
       board: null,
-      createdAt: new Date().toISOString(),
       inviteCode,
     });
 

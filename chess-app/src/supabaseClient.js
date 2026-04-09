@@ -237,7 +237,7 @@ class SupabaseRemote {
     const normalizedRoomId = (roomId || '').trim().toUpperCase();
     const { data, error } = await this.client
       .from('rooms')
-      .update({ ...updates, updatedAt: new Date().toISOString() })
+      .update(updates)
       .eq('id', normalizedRoomId)
       .select('*')
       .single();
