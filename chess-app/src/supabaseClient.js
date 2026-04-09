@@ -5,6 +5,48 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+const ROOM_APP_TO_DB = {
+  inviteCode: 'invitecode',
+  playerWhite: 'playerwhite',
+  playerBlack: 'playerblack',
+  currentPlayer: 'currentplayer',
+  hasMoved: 'hasmoved',
+  enPassantTarget: 'enpassanttarget',
+  lastMove: 'lastmove',
+  gameStatus: 'gamestatus',
+  isCheck: 'ischeck',
+  createdAt: 'createdat',
+  updatedAt: 'updatedat',
+};
+
+const GAME_APP_TO_DB = {
+  playerWhite: 'playerwhite',
+  playerBlack: 'playerblack',
+  startedAt: 'startedat',
+  endedAt: 'endedat',
+  extraData: 'extradata',
+  createdAt: 'createdat',
+};
+
+function reverseMap(map) {
+  return Object.fromEntries(Object.entries(map).map(([appKey, dbKey]) => [dbKey, appKey]));
+}
+
+const ROOM_DB_TO_APP = reverseMap(ROOM_APP_TO_DB);
+const GAME_DB_TO_APP = reverseMap(GAME_APP_TO_DB);
+
+function mapRecordKeys(record, keyMap) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    return record;
+  }
+
+  const mapped = {};
+  Object.entries(record).forEach(([key, value]) => {
+    mapped[keyMap[key] || key] = value;
+  });
+  return mapped;
+}
+
 // Pour le MVP local, on simule Supabase avec localStorage
 class SupabaseSimulator {
   constructor() {
@@ -169,22 +211,26 @@ class SupabaseRemote {
   }
 
   async createGame(gameData) {
+    const dbGameData = mapRecordKeys(gameData, GAME_APP_TO_DB);
     const { data, error } = await this.client
       .from('games')
-      .insert(gameData)
+      .insert(dbGameData)
       .select('*')
       .single();
 
-    return { data, error: error?.message || null };
+    return { data: mapRecordKeys(data, GAME_DB_TO_APP), error: error?.message || null };
   }
 
   async getAllGames() {
     const { data, error } = await this.client
       .from('games')
       .select('*')
-      .order('startedAt', { ascending: false });
+      .order('startedat', { ascending: false });
 
-    return { data: data || [], error: error?.message || null };
+    return {
+      data: (data || []).map((game) => mapRecordKeys(game, GAME_DB_TO_APP)),
+      error: error?.message || null,
+    };
   }
 
   async getGameById(id) {
@@ -194,24 +240,29 @@ class SupabaseRemote {
       .eq('id', id)
       .maybeSingle();
 
-    return { data: data || null, error: error?.message || null };
+    return {
+      data: data ? mapRecordKeys(data, GAME_DB_TO_APP) : null,
+      error: error?.message || null,
+    };
   }
 
   async updateGame(id, updates) {
+    const dbUpdates = mapRecordKeys(updates, GAME_APP_TO_DB);
     const { data, error } = await this.client
       .from('games')
-      .update(updates)
+      .update(dbUpdates)
       .eq('id', id)
       .select('*')
       .single();
 
-    return { data, error: error?.message || null };
+    return { data: mapRecordKeys(data, GAME_DB_TO_APP), error: error?.message || null };
   }
 
   async createRoom(roomData) {
+    const dbRoomData = mapRecordKeys(roomData, ROOM_APP_TO_DB);
     const { data, error } = await this.client
       .from('rooms')
-      .insert(roomData)
+      .insert(dbRoomData)
       .select('*')
       .single();
 
@@ -219,7 +270,7 @@ class SupabaseRemote {
       throw new Error(error.message || 'Erreur de création de room');
     }
 
-    return data;
+    return mapRecordKeys(data, ROOM_DB_TO_APP);
   }
 
   async getRoom(roomId) {
@@ -230,19 +281,23 @@ class SupabaseRemote {
       .eq('id', normalizedRoomId)
       .maybeSingle();
 
-    return { data: data || null, error: error?.message || null };
+    return {
+      data: data ? mapRecordKeys(data, ROOM_DB_TO_APP) : null,
+      error: error?.message || null,
+    };
   }
 
   async updateRoom(roomId, updates) {
     const normalizedRoomId = (roomId || '').trim().toUpperCase();
+    const dbUpdates = mapRecordKeys(updates, ROOM_APP_TO_DB);
     const { data, error } = await this.client
       .from('rooms')
-      .update(updates)
+      .update(dbUpdates)
       .eq('id', normalizedRoomId)
       .select('*')
       .single();
 
-    return { data, error: error?.message || null };
+    return { data: mapRecordKeys(data, ROOM_DB_TO_APP), error: error?.message || null };
   }
 
   onRoomChange(roomId, callback) {
@@ -257,7 +312,13 @@ class SupabaseRemote {
           table: 'rooms',
           filter: `id=eq.${normalizedRoomId}`,
         },
-        (payload) => callback(payload),
+        (payload) => {
+          callback({
+            ...payload,
+            new: mapRecordKeys(payload.new, ROOM_DB_TO_APP),
+            old: mapRecordKeys(payload.old, ROOM_DB_TO_APP),
+          });
+        },
       )
       .subscribe();
 
